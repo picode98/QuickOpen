@@ -1,0 +1,37 @@
+<HTML>
+<HEAD>
+    <META NAME="GENERATOR" Content="Microsoft Visual Studio">
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.js"></script>
+    <script type="text/javascript">
+        $(() => {
+            $('#open-webpage-form').submit(e =>
+            {
+                e.preventDefault();
+                $('#open-url-button').prop('disabled', true);
+                $('#open-webpage-result-text').text('Please wait...');
+                $.post('/api/openWebpage', { url: $('#url-text-input').val() }).done(() => {
+                    $('#open-webpage-result-text').text('Webpage opened successfully.');
+                }).fail((jqXHR, textStatus, errorThrown) => {
+                    $('#open-webpage-result-text').text('An error occurred: ' + errorThrown);
+                }).always(() => {
+                    $('#open-url-button').prop('disabled', false);
+                });
+            });
+
+            //$('#url-text-input').on('input', function () {
+            //    $('#open-url-button').prop('disabled', $(this).val().length === 0);
+            //});
+        });
+    </script>
+    <TITLE>QuickOpen</TITLE>
+</HEAD>
+<BODY>
+<h1>QuickOpen</h1>
+<p>Enter a URL below to open it:</p>
+<form id="open-webpage-form">
+    <input id="url-text-input" type="url" placeholder="Enter a URL..." required/>
+    <button id="open-url-button" type="submit">Open</button>
+    <span id="open-webpage-result-text"></span>
+</form>
+</BODY>
+</HTML>
