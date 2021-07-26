@@ -21,6 +21,8 @@ struct AppConfig
 	wxString browserID;
 	wxString customBrowserPath;
 
+	long maxSaveFileSize = 1 << 20;
+
 	template<typename T>
 	static bool getSettingWarn(const nlohmann::json& config, const std::string& key, T& destination)
 	{

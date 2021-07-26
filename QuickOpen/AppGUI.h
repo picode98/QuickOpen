@@ -15,6 +15,7 @@
 #include <wx/button.h>
 #include <wx/textctrl.h>
 #include <wx/filepicker.h>
+#include <wx/spinctrl.h>
 
 #include <iostream>
 
@@ -60,6 +61,9 @@ class QuickOpenSettings : public wxFrame
 	wxBoxSizer* customBrowserSizer;
 	wxTextCtrl* customBrowserCommandText;
 	wxButton* customBrowserFileBrowseButton;
+
+	wxStaticBox* fileOpenSaveGroup;
+	wxStaticBoxSizer* fileOpenSaveGroupSizer;
 	
 	wxButton* cancelButton;
 	wxButton* saveButton;
@@ -170,6 +174,17 @@ public:
 		webpageOpenGroupSizer->Add(customBrowserSizer, wxSizerFlags(0).Expand().Border(wxTOP, DEFAULT_CONTROL_SPACING));
 
 		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+		this->fileOpenSaveGroup = new wxStaticBox(this, wxID_ANY, wxT("Opening/Saving Files"));
+		this->fileOpenSaveGroupSizer = new wxStaticBoxSizer(fileOpenSaveGroup, wxVERTICAL);
+		topLevelSizer->Add(fileOpenSaveGroupSizer, wxSizerFlags(0).Expand());
+
+		fileOpenSaveGroupSizer->Add(
+			makeLabeledSizer(new wxSpinCtrl(this, wxID_ANY, (wxString() << config->maxSaveFileSize), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 1024),
+				wxT("Maximum size for uploaded files:"), this),
+		wxSizerFlags(0).Expand());
+
+		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 		
 		this->saveButton = new wxButton(this, wxID_OK);
 		this->cancelButton = new wxButton(this, wxID_CANCEL);
@@ -260,17 +275,25 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 	public:
 		enum MenuItems
 		{
-			SETTINGS
+			SETTINGS,
+			EXIT
 		};
 
 		TaskbarMenu(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
 		{
 			this->Append(SETTINGS, wxT("Open Settings"));
+			this->AppendSeparator();
+			this->Append(EXIT, wxT("Exit QuickOpen"));
 		}
 
 		void OnSettingsItemSelected(wxCommandEvent& event)
 		{
 			(new QuickOpenSettings(this->configRef))->Show();
+		}
+
+		void OnExitItemSelected(wxCommandEvent& event)
+		{
+			wxExit();
 		}
 
 		wxDECLARE_EVENT_TABLE();
@@ -290,6 +313,7 @@ public:
 
 wxBEGIN_EVENT_TABLE(QuickOpenTaskbarIcon::TaskbarMenu, wxMenu)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::SETTINGS, QuickOpenTaskbarIcon::TaskbarMenu::OnSettingsItemSelected)
+	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::EXIT, QuickOpenTaskbarIcon::TaskbarMenu::OnExitItemSelected)
 wxEND_EVENT_TABLE()
 
 class QuickOpenApplication : public wxApp

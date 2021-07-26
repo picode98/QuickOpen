@@ -33,5 +33,10 @@
     <button id="open-url-button" type="submit">Open</button>
     <span id="open-webpage-result-text"></span>
 </form>
+<p>or select a file below to open it:</p>
+<form action="/api/openSaveFile" method="post" enctype="multipart/form-data">
+    <input name="uploadFile" type="file" />
+    <button type="submit">Open File</button>
+</form>
 </BODY>
 </HTML>

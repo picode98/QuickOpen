@@ -241,9 +241,7 @@ class OpenWebpageAPIEndpoint : public CivetHandler
 
 public:
 	OpenWebpageAPIEndpoint(WriterReadersLock<AppConfig>& configLock): configLock(configLock)
-	{
-		
-	}
+	{}
 
 	
 	bool handlePost(CivetServer* server, mg_connection* conn) override
@@ -309,6 +307,67 @@ public:
 	}
 };
 
+class OpenSaveFileAPIEndpoint : public CivetHandler
+{
+	WriterReadersLock<AppConfig>& configLock;
+
+	static int getFieldInfo(const char *key, const char *filename, char *path, size_t pathlen, void *user_data)
+	{
+		std::filesystem::path destPath("C:\\Users\\saama\\Downloads\\test.txt");
+		strncpy_s(path, pathlen, WideStrToUTF8Str(destPath).c_str(), _TRUNCATE);
+		return MG_FORM_FIELD_STORAGE_STORE;
+	}
+
+	static int onFileStore(const char *path, long long file_size, void *user_data)
+	{
+		std::cout << "Wrote " << file_size << " bytes of data to " << path << std::endl;
+		return MG_FORM_FIELD_HANDLE_NEXT;
+	}
+	
+public:
+	OpenSaveFileAPIEndpoint(WriterReadersLock<AppConfig>& configLock) : configLock(configLock)
+	{}
+	
+	bool handlePost(CivetServer* server, mg_connection* conn) override
+	{
+		//auto* rq_info = mg_get_request_info(conn);
+		//
+		//{
+		//	WriterReadersLock<AppConfig>::ReadableReference readRef(configLock);
+
+		//	if(rq_info->content_length > readRef->maxSaveFileSize)
+		//	{
+		//		mg_send_http_error(conn, 413, "The file included with this request is too large.");
+		//		return true;
+		//	}
+		//}
+
+		mg_form_data_handler formDataHandler;
+		formDataHandler.field_found = getFieldInfo;
+		formDataHandler.field_get = nullptr;
+		formDataHandler.field_store = onFileStore;
+		formDataHandler.user_data = nullptr;
+
+		mg_handle_form_request(conn, &formDataHandler);
+		return true;
+		
+		// std::ofstream outFile(destPath, std::ofstream::binary);
+		
+		/*static const long long CHUNK_SIZE = 1LL << 20;
+		char* bodyBuffer = new char[CHUNK_SIZE];
+		
+		int bytesRead;
+		while ((bytesRead = mg_read(conn, bodyBuffer, CHUNK_SIZE)) > 0)
+		{
+			outFile.write(bodyBuffer, bytesRead);
+		}
+
+		delete[] bodyBuffer;
+		outFile.close();
+		return true;*/
+	}
+};
+
 int main(int argc, char** argv)
 {
 	AppConfig config = AppConfig::loadConfig();
@@ -323,10 +382,12 @@ int main(int argc, char** argv)
 	TestHandler testHandler;
 	StaticHandler staticHandler("/");
 	OpenWebpageAPIEndpoint webpageAPIEndpoint(wrLock);
+	OpenSaveFileAPIEndpoint fileAPIEndpoint(wrLock);
+	
 	server.addHandler("/test", testHandler);
 	server.addHandler("/", staticHandler);
 	server.addHandler("/api/openWebpage", webpageAPIEndpoint);
-
+	server.addHandler("/api/openSaveFile", fileAPIEndpoint);
 	wxGetApp().setConfigRef(wrLock);
 	wxEntry(argc, argv);
 
