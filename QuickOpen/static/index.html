@@ -18,6 +18,31 @@
                 });
             });
 
+            $('#open-save-file-form').submit(e =>
+            {
+                e.preventDefault();
+
+                // let formData = new FormData($('#open-save-file-form')[0]);
+
+                let fileInfo = $('#uploadFile')[0].files[0];
+                $.post({
+                    url: '/api/openSaveFile/getConsent',
+                    data: JSON.stringify({ "filename": fileInfo.name, "fileSize": fileInfo.size }),
+                    contentType: 'application/json'
+                }).done(data =>
+                {
+                    $.post({
+                        url: '/api/openSaveFile?consentToken=' + data.consentToken,
+                        data: fileInfo,
+                        contentType: 'application/octet-stream',
+                        processData: false
+                    }).done(() =>
+                    {
+                        alert('File uploaded.');
+                    });
+                });
+            });
+
             //$('#url-text-input').on('input', function () {
             //    $('#open-url-button').prop('disabled', $(this).val().length === 0);
             //});
@@ -34,8 +59,8 @@
     <span id="open-webpage-result-text"></span>
 </form>
 <p>or select a file below to open it:</p>
-<form action="/api/openSaveFile" method="post" enctype="multipart/form-data">
-    <input name="uploadFile" type="file" />
+<form id="open-save-file-form">
+    <input id="uploadFile" name="uploadFile" type="file" />
     <button type="submit">Open File</button>
 </form>
 </BODY>

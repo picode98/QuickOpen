@@ -64,6 +64,8 @@ class QuickOpenSettings : public wxFrame
 
 	wxStaticBox* fileOpenSaveGroup;
 	wxStaticBoxSizer* fileOpenSaveGroupSizer;
+	wxDirPickerCtrl* saveFolderPicker;
+	wxCheckBox* savePromptEachFileCheckbox;
 	
 	wxButton* cancelButton;
 	wxButton* saveButton;
@@ -184,6 +186,20 @@ public:
 				wxT("Maximum size for uploaded files:"), this),
 		wxSizerFlags(0).Expand());
 
+		fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+		fileOpenSaveGroupSizer->Add(
+			makeLabeledSizer(saveFolderPicker = new wxDirPickerCtrl(this, wxID_ANY, wxEmptyString, wxT("Select Download Folder")),
+				wxT("Folder for downloads:"), this),
+			wxSizerFlags(0).Expand());
+		saveFolderPicker->SetDirName(config->fileSavePath);
+
+		fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+		fileOpenSaveGroupSizer->Add(savePromptEachFileCheckbox = new wxCheckBox(this, wxID_ANY, wxT("Prompt for a save location for each file")));
+		savePromptEachFileCheckbox->Bind(wxEVT_CHECKBOX, &QuickOpenSettings::OnSavePromptCheckboxChecked, this);
+		savePromptEachFileCheckbox->SetValue(config->alwaysPromptSave);
+		
 		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 		
 		this->saveButton = new wxButton(this, wxID_OK);
@@ -202,6 +218,7 @@ public:
 		
 		this->SetSizerAndFit(windowPaddingSizer);
 		this->updateCustomBrowserHidden();
+		this->updateSaveFolderEnabledState();
 		//this->runAtStartupCheckbox->SetSize(300, 50);
 	}
 
@@ -221,7 +238,9 @@ public:
 		config->browserID = selectionIsInstalledBrowser ? this->installedBrowsers[selectionIndex - this->browserSelInstalledListStartIndex].browserID : "";
 
 		config->customBrowserPath = (selectionIndex == this->browserSelCustomBrowserIndex) ? this->customBrowserCommandText->GetValue().ToUTF8() : ""; // TODO
-		
+
+		config->fileSavePath = this->saveFolderPicker->GetDirName();
+		config->alwaysPromptSave = this->savePromptEachFileCheckbox->IsChecked();
 		
 		config->saveConfig();
 
@@ -261,6 +280,88 @@ public:
 		{
 			this->customBrowserCommandText->SetValue(wxT("\"") + dialog.GetPath() + wxT("\" \"$url\""));
 		}
+	}
+
+	void OnSavePromptCheckboxChecked(wxCommandEvent& event)
+	{
+		updateSaveFolderEnabledState();
+	}
+
+	void updateSaveFolderEnabledState()
+	{
+		if (savePromptEachFileCheckbox->GetValue())
+		{
+			saveFolderPicker->Disable();
+		}
+		else
+		{
+			saveFolderPicker->Enable();
+		}
+	}
+};
+
+class FileOpenSaveConsentDialog : public wxDialog
+{
+	wxButton* acceptButton = nullptr;
+	wxButton* rejectButton = nullptr;
+	wxFilePickerCtrl* destFilenameInput = nullptr;
+public:
+	enum ResultCode
+	{
+		ACCEPT,
+		DECLINE
+	};
+	
+	FileOpenSaveConsentDialog(const wxFileName& defaultDestination, unsigned long long fileSize) : wxDialog(nullptr, wxID_ANY, wxT("Receiving File"))
+	{
+		wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
+		wxBoxSizer* topLevelSizer = new wxBoxSizer(wxVERTICAL);
+		windowPaddingSizer->Add(topLevelSizer, wxSizerFlags(1).Expand().Border(wxALL, DEFAULT_CONTROL_SPACING));
+
+		topLevelSizer->Add(new wxStaticText(this, wxID_ANY,
+			wxString() << wxT("A user is sending the file \"") << defaultDestination.GetFullName() << wxT("\" (") << wxFileName::GetHumanReadableSize(fileSize) << wxT(").\n")
+							<< wxT("Would you like to accept it?")
+		));
+
+		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+		
+		topLevelSizer->Add(makeLabeledSizer(destFilenameInput =
+			new wxFilePickerCtrl(this, wxID_ANY, defaultDestination.GetFullPath(), wxT("Select Save Destination"),
+				wxString() << wxT(".") << defaultDestination.GetExt() << wxT(" files|*.") << defaultDestination.GetExt() << wxT("|All files|*.*"), 
+				wxDefaultPosition, wxDefaultSize, wxFLP_SAVE | wxFLP_USE_TEXTCTRL | wxFLP_OVERWRITE_PROMPT),
+			wxT("Save file to:"), this), wxSizerFlags(0).Expand());
+
+		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+		topLevelSizer->AddStretchSpacer(1);
+		
+		auto* bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL);
+
+		bottomButtonSizer->AddStretchSpacer(1);
+		bottomButtonSizer->Add(acceptButton = new wxButton(this, wxID_ANY, wxT("Accept")));
+		bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+		bottomButtonSizer->Add(rejectButton = new wxButton(this, wxID_ANY, wxT("Decline")));
+
+		topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
+
+		acceptButton->Bind(wxEVT_BUTTON, &FileOpenSaveConsentDialog::OnAcceptClicked, this);
+		rejectButton->Bind(wxEVT_BUTTON, &FileOpenSaveConsentDialog::OnDeclineClicked, this);
+
+		this->SetSizerAndFit(windowPaddingSizer);
+	}
+
+	void OnAcceptClicked(wxCommandEvent& event)
+	{
+		this->EndModal(ACCEPT);
+	}
+
+	void OnDeclineClicked(wxCommandEvent& event)
+	{
+		this->EndModal(DECLINE);
+	}
+
+	wxFileName getConsentedFilename() const
+	{
+		return wxFileName(destFilenameInput->GetPath());
 	}
 };
 

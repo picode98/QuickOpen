@@ -253,3 +253,16 @@ std::filesystem::path getAppExecutablePath()
 		}
 	}
 }
+
+template<typename T>
+T generateCryptoRandomInteger()
+{
+	T result;
+	BCryptGenRandom(nullptr, reinterpret_cast<unsigned char*>(&result), sizeof(T), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+	return result;
+}
+
+std::filesystem::path UTF8StrToPath(const std::string& UTF8Str)
+{
+	return std::filesystem::path(UTF8StrToWideStr(UTF8Str));
+}

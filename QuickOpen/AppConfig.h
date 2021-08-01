@@ -21,6 +21,9 @@ struct AppConfig
 	wxString browserID;
 	wxString customBrowserPath;
 
+	bool alwaysPromptSave = true;
+	wxFileName fileSavePath;
+
 	long maxSaveFileSize = 1 << 20;
 
 	template<typename T>
@@ -50,6 +53,24 @@ struct AppConfig
 		return successVal;
 	}
 	
+	static bool getSettingWarn(const nlohmann::json& config, const std::string& key, wxFileName& destination, bool isDir)
+	{
+		wxString strVal;
+		bool successVal = getSettingWarn(config, key, strVal);
+		if (successVal)
+		{
+			if(isDir)
+			{
+				destination.AssignDir(strVal);
+			}
+			else
+			{
+				destination.Assign(strVal);
+			}
+		}
+		return successVal;
+	}
+	
 	void saveConfig(const std::filesystem::path& filePath = DEFAULT_CONFIG_PATH)
 	{
 		nlohmann::json jsonConfig = {
@@ -57,6 +78,9 @@ struct AppConfig
 			{ "webpageOpen", {
 				{ "browserID", browserID.ToUTF8() },
 				{ "customBrowserPath", customBrowserPath.ToUTF8() }
+			} }, { "openSaveFile", {
+				{ "alwaysPromptSave", alwaysPromptSave },
+				{ "savePath", fileSavePath.GetPath().ToUTF8() }
 			} }
 		};
 
@@ -89,6 +113,13 @@ struct AppConfig
 		{
 			getSettingWarn(openWebpageSettings, "browserID",  newConfig.browserID);
 			getSettingWarn(openWebpageSettings, "customBrowserPath", newConfig.customBrowserPath);
+		}
+
+		nlohmann::json openSaveFileSettings;
+		if(getSettingWarn(jsonConfig, "openSaveFile", openSaveFileSettings))
+		{
+			getSettingWarn(openSaveFileSettings, "alwaysPromptSave", newConfig.alwaysPromptSave);
+			getSettingWarn(openSaveFileSettings, "savePath", newConfig.fileSavePath, true);
 		}
 
 		return newConfig;

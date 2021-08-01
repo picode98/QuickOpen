@@ -1,10 +1,14 @@
 #pragma once
 
 #include <shared_mutex>
+#include <sstream>
 #include <string>
 #include <wx/string.h>
 #include <wx/wxcrt.h>
 #include <map>
+
+
+#include <civetweb.h>
 
 template<typename T>
 class WriterReadersLock
@@ -155,4 +159,20 @@ wxString substituteFormatString(const wxString& format, wxUniChar placeholderCha
 	}
 
 	return resultStr;
+}
+
+std::string MGReadAll(mg_connection* conn)
+{
+	std::stringstream strBuilder;
+	
+	static const long long CHUNK_SIZE = 1LL << 16;
+	char bodyBuffer[CHUNK_SIZE];
+
+	int bytesRead;
+	while ((bytesRead = mg_read(conn, bodyBuffer, CHUNK_SIZE)) > 0)
+	{
+		strBuilder << std::string(bodyBuffer, bytesRead);
+	}
+
+	return strBuilder.str();
 }

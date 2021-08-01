@@ -16,7 +16,9 @@
 #include <filesystem>
 #include <map>
 #include <sstream>
+#include <condition_variable>
 #include <iostream>
+#include <optional>
 
 #ifdef _WIN32
 #include "WinUtils.h"
@@ -25,6 +27,7 @@
 const std::filesystem::path STATIC_PATH = std::filesystem::current_path() / "static";
 const int PORT = 80;
 
+typedef uint32_t ConsentToken;
 
 template<typename ObjType, typename PrefixType>
 bool startsWith(const ObjType& obj, const PrefixType& prefix)
@@ -307,15 +310,121 @@ public:
 	}
 };
 
+struct RequestedFileInfo
+{
+	wxString filename;
+	unsigned long long fileSize;
+
+	wxFileName consentedFileName;
+
+	static RequestedFileInfo fromJSON(const nlohmann::json& json)
+	{
+		return { wxString::FromUTF8(json["filename"]), json["fileSize"] };
+	}
+
+	nlohmann::json toJSON()
+	{
+		return {
+			{ "filename", filename.ToUTF8() },
+			{ "fileSize", fileSize }
+		};
+	}
+};
+
+class FileConsentTokenService : public CivetHandler
+{
+	static const size_t MAX_REQUEST_BODY_SIZE = 1 << 16;
+
+public:
+	typedef std::map<ConsentToken, RequestedFileInfo> TokenMap;
+	WriterReadersLock<TokenMap> tokenWRRef;
+private:
+	TokenMap tokens;
+	WriterReadersLock<AppConfig>& configLock;
+
+public:
+	FileConsentTokenService(WriterReadersLock<AppConfig>& configLock) : tokenWRRef(&tokens), configLock(configLock)
+	{}
+
+	bool handlePost(CivetServer* server, mg_connection* conn) override
+	{
+		std::string bodyStr = MGReadAll(conn);
+		auto rqFileInfo = RequestedFileInfo::fromJSON(nlohmann::json::parse(bodyStr));
+
+		wxFileName destPath;
+		{
+			WriterReadersLock<AppConfig>::ReadableReference configRef(configLock);
+			destPath = wxFileName(configRef->fileSavePath);
+			destPath.SetFullName(rqFileInfo.filename);
+		}
+		
+		std::optional<FileOpenSaveConsentDialog::ResultCode> resultCode;
+		std::condition_variable dialogResult;
+		std::mutex dialogResultMutex;
+		std::unique_lock<std::mutex> dialogResultLock(dialogResultMutex);
+
+		wxGetApp().CallAfter([&dialogResultMutex, &dialogResult, &resultCode, &destPath, &rqFileInfo]
+		{
+			auto consentDlg = FileOpenSaveConsentDialog(destPath, rqFileInfo.fileSize);
+			auto dlgResult = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
+			consentDlg.Show();
+			std::lock_guard<std::mutex> resultLock(dialogResultMutex);
+			resultCode = dlgResult;
+
+			if(resultCode == FileOpenSaveConsentDialog::ACCEPT)
+			{
+				rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
+			}
+			dialogResult.notify_all();
+		});
+
+		while(!resultCode.has_value())
+		{
+			dialogResult.wait(dialogResultLock);
+		}
+		
+		if (resultCode.value() == FileOpenSaveConsentDialog::ACCEPT)
+		{
+			// rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
+			ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
+
+			{
+				WriterReadersLock<TokenMap>::WritableReference writeRef(tokenWRRef);
+				writeRef->insert({ newToken, rqFileInfo });
+			}
+
+			std::string jsonResponse = nlohmann::json{ { "consentToken", newToken } }.dump();
+			mg_send_http_ok(conn, "application/json", jsonResponse.size());
+			mg_write(conn, jsonResponse.c_str(), jsonResponse.size());
+		}
+		else
+		{
+			mg_send_http_error(conn, 403, "The user declined to receive the file.");
+		}
+
+		return true;
+	}
+};
+
 class OpenSaveFileAPIEndpoint : public CivetHandler
 {
-	WriterReadersLock<AppConfig>& configLock;
+	// WriterReadersLock<AppConfig>& configLock;
+	FileConsentTokenService& consentServiceRef;
 
 	static int getFieldInfo(const char *key, const char *filename, char *path, size_t pathlen, void *user_data)
 	{
-		std::filesystem::path destPath("C:\\Users\\saama\\Downloads\\test.txt");
-		strncpy_s(path, pathlen, WideStrToUTF8Str(destPath).c_str(), _TRUNCATE);
-		return MG_FORM_FIELD_STORAGE_STORE;
+		auto* consentedFileInfo = reinterpret_cast<RequestedFileInfo*>(user_data);
+
+		if (std::string(filename) == consentedFileInfo->filename)
+		{
+			std::filesystem::path destPath = std::filesystem::path("C:\\Users\\saama\\Downloads") / filename;
+			strncpy_s(path, pathlen, WideStrToUTF8Str(destPath).c_str(), _TRUNCATE);
+			return MG_FORM_FIELD_STORAGE_STORE;
+		}
+		else
+		{
+			return MG_FORM_FIELD_STORAGE_ABORT;
+		}
 	}
 
 	static int onFileStore(const char *path, long long file_size, void *user_data)
@@ -323,9 +432,125 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 		std::cout << "Wrote " << file_size << " bytes of data to " << path << std::endl;
 		return MG_FORM_FIELD_HANDLE_NEXT;
 	}
-	
+
+	//int readHalfBuffer(mg_connection* conn, char* buffer, size_t bufSize)
+	//{
+	//	auto maxAmtToRead = bufSize / 2;
+	//	char* readBuf = new char[maxAmtToRead];
+
+	//	int bytesRead = mg_read(conn, readBuf, maxAmtToRead);
+	//	memcpy(buffer, buffer + bytesRead, bufSize - bytesRead);
+	//	memcpy(buffer + (bufSize - bytesRead), readBuf, bytesRead);
+
+	//	return bytesRead;
+	//}
+
+	//void writeChunk(size_t partNum, std::string_view chunk)
+	//{
+	//	std::ofstream partOutStream(std::to_string(partNum) + ".txt", std::ofstream::app | std::ofstream::binary);
+	//	partOutStream << chunk;
+	//	partOutStream.close();
+	//}
+
+	//void parseMultipartBodyChunked(mg_connection* conn)
+	//{
+	//	static const long long CHUNK_SIZE = 1LL << 16;
+	//	char* bodyBuffer = new char[CHUNK_SIZE + 1];
+	//	char* bodyBufferEnd = bodyBuffer + CHUNK_SIZE;
+	//	bodyBuffer[CHUNK_SIZE] = '\0';
+
+	//	std::string contentType = mg_get_header(conn, "Content-Type");
+	//	const std::string BOUNDARY_ATTR = "boundary=", HEADER_END_STR = "\r\n\r\n";
+	//	auto boundaryAttrStart = contentType.find(BOUNDARY_ATTR);
+
+	//	if(boundaryAttrStart == std::string::npos)
+	//	{
+	//		return;
+	//	}
+
+	//	std::string boundaryStr = "--" + contentType.substr(boundaryAttrStart + BOUNDARY_ATTR.size());
+	//	
+	//	/*mg_read(conn, bodyBuffer, CHUNK_SIZE);
+
+	//	char* unprocessedStart = nullptr;
+	//	while((unprocessedStart = std::search(bodyBuffer, bodyBufferEnd, boundaryStr.begin(), boundaryStr.end())) == bodyBufferEnd)
+	//	{
+	//		if(readHalfBuffer(conn, bodyBuffer, CHUNK_SIZE) == 0)
+	//		{
+	//			return;
+	//		}
+	//	}
+
+	//	unprocessedStart += boundaryStr.size();*/
+	//	char* unprocessedStart = bodyBuffer;
+	//	char* copyStart = unprocessedStart;
+	//	size_t partNum = 0;
+	//	int bytesRead;
+	//	bool headerSection = false;
+	//	do
+	//	{
+	//		if(headerSection)
+	//		{
+	//			if((unprocessedStart = std::search(copyStart, bodyBufferEnd, HEADER_END_STR.begin(), HEADER_END_STR.end())) == bodyBufferEnd)
+	//			{
+	//				
+	//			}
+	//		}
+	//		while ((unprocessedStart = std::search(copyStart, bodyBufferEnd, boundaryStr.begin(), boundaryStr.end())) != bodyBufferEnd)
+	//		{
+	//			if (partNum > 0)
+	//			{
+	//				writeChunk(partNum, std::string_view(copyStart, unprocessedStart - copyStart));
+	//			}
+	//			++partNum;
+	//			copyStart = unprocessedStart + boundaryStr.size();
+	//		}
+
+	//		// std::string_view(copyStart, bodyBufferEnd - copyStart);
+
+	//		bytesRead = readHalfBuffer(conn, bodyBuffer, CHUNK_SIZE);
+	//		unprocessedStart = ((unprocessedStart - bytesRead) - bodyBuffer > 0) ? (unprocessedStart - bytesRead) : bodyBuffer;
+	//	} while (bytesRead > 0);
+
+	//	delete[] bodyBuffer;
+	//	
+	//	//std::string_view boundaryFirstHalf(boundaryStr.c_str(), boundaryStr.size() / 2),
+	//	//	boundarySecondHalf(boundaryStr.c_str() + (boundaryStr.size() / 2));
+	//	//
+	//	//int bytesRead;
+	//	//while ((bytesRead = mg_read(conn, bodyBuffer.data(), CHUNK_SIZE + 1)) > 0)
+	//	//{
+	//	//	auto firstPartStart = bodyBuffer.find(boundaryFirstHalf)
+	//	//}
+	//}
+
+	bool MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize)
+	{
+		std::ofstream outFile(fileName.GetFullPath().ToStdWstring(), std::ofstream::binary);
+
+		static const long long CHUNK_SIZE = 1LL << 20;
+		unsigned long long bytesWritten = 0;
+		char* bodyBuffer = new char[CHUNK_SIZE];
+
+		int bytesRead;
+		while ((bytesRead = mg_read(conn, bodyBuffer, CHUNK_SIZE)) > 0)
+		{
+			bytesWritten += bytesRead;
+
+			if(bytesWritten > targetFileSize)
+			{
+				break;
+			}
+			
+			outFile.write(bodyBuffer, bytesRead);
+		}
+
+		delete[] bodyBuffer;
+		outFile.close();
+		return bytesWritten == targetFileSize;
+	}
 public:
-	OpenSaveFileAPIEndpoint(WriterReadersLock<AppConfig>& configLock) : configLock(configLock)
+	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef) : consentServiceRef(consentServiceRef)
 	{}
 	
 	bool handlePost(CivetServer* server, mg_connection* conn) override
@@ -342,13 +567,64 @@ public:
 		//	}
 		//}
 
-		mg_form_data_handler formDataHandler;
-		formDataHandler.field_found = getFieldInfo;
-		formDataHandler.field_get = nullptr;
-		formDataHandler.field_store = onFileStore;
-		formDataHandler.user_data = nullptr;
+		auto queryStringMap = parseQueryString(conn);
 
-		mg_handle_form_request(conn, &formDataHandler);
+		if(queryStringMap.count("consentToken") > 0)
+		{
+			ConsentToken parsedToken = atoll(queryStringMap["consentToken"].c_str());
+			RequestedFileInfo consentedFileInfo;
+			bool fileFound = false;
+
+			{
+				WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference tokens(consentServiceRef.tokenWRRef);
+
+				if (tokens->count(parsedToken) > 0)
+				{
+					consentedFileInfo = tokens->at(parsedToken);
+					fileFound = true;
+
+					tokens->erase(parsedToken);
+				}
+			}
+
+			if(fileFound)
+			{
+				/*mg_form_data_handler formDataHandler;
+				formDataHandler.field_found = getFieldInfo;
+				formDataHandler.field_get = nullptr;
+				formDataHandler.field_store = onFileStore;
+				formDataHandler.user_data = &consentedFileInfo;
+				
+
+				mg_handle_form_request(conn, &formDataHandler);*/
+
+				//wxFileName destPath;
+				//{
+				//	WriterReadersLock<AppConfig>::ReadableReference configRef(configLock);
+				//	destPath = wxFileName(configRef->fileSavePath);
+				//	destPath.SetFullName(consentedFileInfo.filename);
+				//}
+				
+				if(MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize))
+				{
+					mg_send_http_ok(conn, "text/plain", 0);
+				}
+				else
+				{
+					mg_send_http_error(conn, 400, "The file sent did not have the length specified by the consent token used.");
+				}
+				// parseMultipartBodyChunked(conn);
+			}
+			else
+			{
+				mg_send_http_error(conn, 403, "The consent token provided was not valid.");
+			}
+		}
+		else
+		{
+			mg_send_http_error(conn, 401, "No consent token was provided.");
+		}
+		
 		return true;
 		
 		// std::ofstream outFile(destPath, std::ofstream::binary);
@@ -368,9 +644,36 @@ public:
 	}
 };
 
+//int updateSessionCookie(mg_connection* conn)
+//{
+//	static const std::string SESSION_COOKIE_NAME = "_session_id", SESSION_VAR_NAME = "id";
+//	static const size_t SESSION_ID_STR_SIZE = std::numeric_limits<SessionID>::digits10 + 1;
+//	char existingSessIDStr[SESSION_ID_STR_SIZE];
+//	mg_get_request_info(conn)->http_headers[0].
+//	int getCookieResult = mg_get_cookie(SESSION_COOKIE_NAME.c_str(), SESSION_VAR_NAME.c_str(), existingSessIDStr, SESSION_ID_STR_SIZE);
+//	mg_context* ctx = mg_get_context(conn);
+//	ctx->
+//	if(getCookieResult < 0)
+//	{
+//		SessionID newID = generateCryptoRandomInteger<SessionID>();
+//
+//		mg_s
+//	}
+//}
+
 int main(int argc, char** argv)
 {
-	AppConfig config = AppConfig::loadConfig();
+	AppConfig config;
+
+	try
+	{
+		config = AppConfig::loadConfig();
+	}
+	catch (const std::ios_base::failure&)
+	{
+		std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::DEFAULT_CONFIG_PATH << "\"." << std::endl;
+	}
+	
 	WriterReadersLock<AppConfig> wrLock(&config);
 	
 	std::vector<std::string> options = {
@@ -378,16 +681,22 @@ int main(int argc, char** argv)
 			"listening_ports", std::to_string(PORT)
 	};
 
+	// CivetCallbacks serverCallbacks;
+	// serverCallbacks.begin_request
+
 	CivetServer server(options);
 	TestHandler testHandler;
 	StaticHandler staticHandler("/");
 	OpenWebpageAPIEndpoint webpageAPIEndpoint(wrLock);
-	OpenSaveFileAPIEndpoint fileAPIEndpoint(wrLock);
+	FileConsentTokenService fileConsentTokenService(wrLock);
+	OpenSaveFileAPIEndpoint fileAPIEndpoint(fileConsentTokenService);
 	
 	server.addHandler("/test", testHandler);
 	server.addHandler("/", staticHandler);
 	server.addHandler("/api/openWebpage", webpageAPIEndpoint);
 	server.addHandler("/api/openSaveFile", fileAPIEndpoint);
+	server.addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);
+	
 	wxGetApp().setConfigRef(wrLock);
 	wxEntry(argc, argv);
 
