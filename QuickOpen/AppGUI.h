@@ -2,21 +2,26 @@
 
 #define UNICODE
 
-#include <wx/app.h>
-#include <wx/msgdlg.h>
-#include <wx/menu.h>
+#include <wx/wx.h>
+//#include <wx/app.h>
+//#include <wx/msgdlg.h>
+//#include <wx/menu.h>
 #include <wx/taskbar.h>
-#include <wx/frame.h>
-#include <wx/statbox.h>
-#include <wx/sizer.h>
-#include <wx/checkbox.h>
-#include <wx/choice.h>
-#include <wx/stattext.h>
-#include <wx/button.h>
-#include <wx/textctrl.h>
+//#include <wx/frame.h>
+//#include <wx/statbox.h>
+//#include <wx/sizer.h>
+//#include <wx/checkbox.h>
+//#include <wx/choice.h>
+//#include <wx/stattext.h>
+//#include <wx/button.h>
+//#include <wx/textctrl.h>
 #include <wx/filepicker.h>
 #include <wx/spinctrl.h>
+#include <wx/richtooltip.h>
+//#include <wx/gauge.h>
+// #include <wx/scrolwin.h>
 
+#include <optional>
 #include <iostream>
 
 #include "AppConfig.h"
@@ -44,6 +49,152 @@ wxBoxSizer* makeLabeledSizer(wxWindow* control, const wxString& labelText, wxWin
 	sizer->Add(control, wxSizerFlags(1).Expand());
 
 	return sizer;
+}
+
+struct FilePathValidator : public wxValidator
+{
+	bool dirPath = false,
+		absolutePath = true;
+	wxFileName fileName;
+
+	wxFileName getControlValue() const
+	{
+		auto* textCtrl = dynamic_cast<wxTextEntryBase*>(m_validatorWindow);
+
+		if(textCtrl != nullptr)
+		{
+			if (dirPath)
+			{
+				wxFileName parsedPath;
+				parsedPath.AssignDir(textCtrl->GetValue());
+				return parsedPath;
+			}
+			else
+			{
+				return wxFileName(textCtrl->GetValue());
+			}
+		}
+
+		
+		auto* pickerCtrl = dynamic_cast<wxFilePickerCtrl*>(m_validatorWindow);
+
+		if(pickerCtrl != nullptr && !dirPath)
+		{
+			return pickerCtrl->GetFileName();
+		}
+
+		auto* dirPickerCtrl = dynamic_cast<wxDirPickerCtrl*>(m_validatorWindow);
+
+		if(dirPickerCtrl != nullptr && dirPath)
+		{
+			return dirPickerCtrl->GetDirName();
+		}
+
+		throw std::bad_cast();
+	}
+
+	void setControlValue(const wxFileName& path)
+	{
+		auto* textCtrl = dynamic_cast<wxTextEntryBase*>(m_validatorWindow);
+
+		if (textCtrl != nullptr)
+		{
+			textCtrl->SetValue(fileName.GetFullPath());
+			return;
+		}
+
+		auto* pickerCtrl = dynamic_cast<wxFilePickerCtrl*>(m_validatorWindow);
+
+		if (pickerCtrl != nullptr && !dirPath)
+		{
+			pickerCtrl->SetFileName(path);
+			return;
+		}
+
+		auto* dirPickerCtrl = dynamic_cast<wxDirPickerCtrl*>(m_validatorWindow);
+
+		if (dirPickerCtrl != nullptr && dirPath)
+		{
+			dirPickerCtrl->SetDirName(path);
+			return;
+		}
+
+		throw std::bad_cast();
+	}
+public:
+	FilePathValidator(const wxFileName& fileName, bool dirPath = false, bool absolutePath = true) :
+		fileName(fileName), dirPath(dirPath), absolutePath(absolutePath)
+	{}
+	
+	bool Validate(wxWindow* parent) override
+	{
+		auto value = getControlValue();
+		std::cout << "Validating " << value.GetFullPath() << std::endl;
+		// bool isValid = value.IsOk() && (!value.GetFullPath().IsEmpty()) && (!absolutePath || value.IsAbsolute());
+
+		if(value.IsOk() && (!value.GetFullPath().IsEmpty()))
+		{
+			if(absolutePath && !value.IsAbsolute())
+			{
+				auto* toolTip = new wxRichToolTip(wxT("Invalid path"), wxT("Please enter an absolute path."));
+				toolTip->SetIcon(wxICON_ERROR);
+				toolTip->ShowFor(m_validatorWindow);
+				return false;
+			}
+			else
+			{
+				return true;
+			}
+		}
+		else
+		{
+			auto* toolTip = new wxRichToolTip(wxT("Invalid path"), wxT("Please enter a valid path."));
+			toolTip->SetIcon(wxICON_ERROR);
+			toolTip->ShowFor(m_validatorWindow);
+			return false;
+		}
+	}
+
+	bool TransferFromWindow() override
+	{
+		fileName = getControlValue();
+		return true;
+	}
+
+	bool TransferToWindow() override
+	{
+		setControlValue(fileName);
+		return true;
+	}
+
+	wxObject* Clone() const override
+	{
+		return new FilePathValidator(*this);
+	}
+};
+
+template<typename AppType, typename FuncType, typename ResultType>
+ResultType wxCallAfterSync(AppType& app, FuncType func)
+{
+	std::optional<ResultType> resultVal;
+	std::condition_variable resultFlag;
+	std::mutex resultMutex;
+	std::unique_lock<std::mutex> resultLock(resultMutex);
+
+	app.CallAfter([&resultMutex, &resultFlag, &func, &resultVal]
+	{
+		ResultType result = func();
+		std::lock_guard<std::mutex> resultSetLock(resultMutex);
+		resultVal = result;
+		resultFlag.notify_all();
+	});
+
+	while (!resultVal.has_value())
+	{
+		resultFlag.wait(resultLock);
+	}
+
+	return resultVal.value();
 }
 
 class QuickOpenSettings : public wxFrame
@@ -192,7 +343,8 @@ public:
 			makeLabeledSizer(saveFolderPicker = new wxDirPickerCtrl(this, wxID_ANY, wxEmptyString, wxT("Select Download Folder")),
 				wxT("Folder for downloads:"), this),
 			wxSizerFlags(0).Expand());
-		saveFolderPicker->SetDirName(config->fileSavePath);
+		// saveFolderPicker->SetDirName(config->fileSavePath);
+		saveFolderPicker->SetValidator(FilePathValidator(config->fileSavePath, true));
 
 		fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
@@ -215,7 +367,7 @@ public:
 		topLevelSizer->AddStretchSpacer(1);
 		topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
 
-		
+		this->TransferDataToWindow();
 		this->SetSizerAndFit(windowPaddingSizer);
 		this->updateCustomBrowserHidden();
 		this->updateSaveFolderEnabledState();
@@ -224,27 +376,30 @@ public:
 
 	void OnSaveButton(wxCommandEvent& event)
 	{
-		WriterReadersLock<AppConfig>::WritableReference config(this->configRef);
-		
-		std::cout << "Saving settings." << std::endl;
-		
-		config->runAtStartup = runAtStartupCheckbox->IsChecked();
+		if (this->Validate() && this->TransferDataFromWindow())
+		{
+			WriterReadersLock<AppConfig>::WritableReference config(this->configRef);
 
-		int selectionIndex = this->browserSelection->GetSelection();
+			std::cout << "Saving settings." << std::endl;
 
-		bool selectionIsInstalledBrowser = selectionIndex >= this->browserSelInstalledListStartIndex
-			&& selectionIndex < this->browserSelInstalledListStartIndex + this->installedBrowsers.size();
-		
-		config->browserID = selectionIsInstalledBrowser ? this->installedBrowsers[selectionIndex - this->browserSelInstalledListStartIndex].browserID : "";
+			config->runAtStartup = runAtStartupCheckbox->IsChecked();
 
-		config->customBrowserPath = (selectionIndex == this->browserSelCustomBrowserIndex) ? this->customBrowserCommandText->GetValue().ToUTF8() : ""; // TODO
+			int selectionIndex = this->browserSelection->GetSelection();
 
-		config->fileSavePath = this->saveFolderPicker->GetDirName();
-		config->alwaysPromptSave = this->savePromptEachFileCheckbox->IsChecked();
-		
-		config->saveConfig();
+			bool selectionIsInstalledBrowser = selectionIndex >= this->browserSelInstalledListStartIndex
+				&& selectionIndex < this->browserSelInstalledListStartIndex + this->installedBrowsers.size();
 
-		this->Close();
+			config->browserID = selectionIsInstalledBrowser ? this->installedBrowsers[selectionIndex - this->browserSelInstalledListStartIndex].browserID : "";
+
+			config->customBrowserPath = (selectionIndex == this->browserSelCustomBrowserIndex) ? this->customBrowserCommandText->GetValue().ToUTF8() : ""; // TODO
+
+			config->fileSavePath = dynamic_cast<FilePathValidator*>(this->saveFolderPicker->GetValidator())->fileName;
+			config->alwaysPromptSave = this->savePromptEachFileCheckbox->IsChecked();
+
+			config->saveConfig();
+
+			this->Close();
+		}
 	}
 
 	void OnCancelButton(wxCommandEvent& event)
@@ -312,7 +467,8 @@ public:
 		DECLINE
 	};
 	
-	FileOpenSaveConsentDialog(const wxFileName& defaultDestination, unsigned long long fileSize) : wxDialog(nullptr, wxID_ANY, wxT("Receiving File"))
+	FileOpenSaveConsentDialog(const wxFileName& defaultDestination, unsigned long long fileSize) : wxDialog(nullptr, wxID_ANY, wxT("Receiving File"),
+		wxDefaultPosition, wxDefaultSize)
 	{
 		wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
 		wxBoxSizer* topLevelSizer = new wxBoxSizer(wxVERTICAL);
@@ -326,10 +482,12 @@ public:
 		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 		
 		topLevelSizer->Add(makeLabeledSizer(destFilenameInput =
-			new wxFilePickerCtrl(this, wxID_ANY, defaultDestination.GetFullPath(), wxT("Select Save Destination"),
+			new wxFilePickerCtrl(this, wxID_ANY, wxEmptyString, wxT("Select Save Destination"),
 				wxString() << wxT(".") << defaultDestination.GetExt() << wxT(" files|*.") << defaultDestination.GetExt() << wxT("|All files|*.*"), 
 				wxDefaultPosition, wxDefaultSize, wxFLP_SAVE | wxFLP_USE_TEXTCTRL | wxFLP_OVERWRITE_PROMPT),
 			wxT("Save file to:"), this), wxSizerFlags(0).Expand());
+
+		destFilenameInput->SetValidator(FilePathValidator(defaultDestination));
 
 		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 		topLevelSizer->AddStretchSpacer(1);
@@ -351,7 +509,14 @@ public:
 
 	void OnAcceptClicked(wxCommandEvent& event)
 	{
-		this->EndModal(ACCEPT);
+		if(this->Validate() && this->TransferDataFromWindow())
+		{
+			this->EndModal(ACCEPT);
+		}
+		else
+		{
+			std::cout << "Validation failed." << std::endl;
+		}
 	}
 
 	void OnDeclineClicked(wxCommandEvent& event)
@@ -361,13 +526,194 @@ public:
 
 	wxFileName getConsentedFilename() const
 	{
-		return wxFileName(destFilenameInput->GetPath());
+		return dynamic_cast<FilePathValidator*>(destFilenameInput->GetValidator())->fileName;
+	}
+};
+
+class TrayStatusWindow : public wxFrame
+{
+public:
+	class ActivityEntry : public wxBoxSizer
+	{
+	public:
+		ActivityEntry(wxWindow* parent) : wxBoxSizer(wxVERTICAL)
+		{}
+	};
+
+	class WebpageOpenedActivityEntry : public ActivityEntry
+	{
+		wxBoxSizer* horizSizer = nullptr;
+		wxStaticText* entryText = nullptr;
+		wxButton* copyURLButton = nullptr;
+	public:
+		WebpageOpenedActivityEntry(wxWindow* parent, const wxString& url) : ActivityEntry(parent)
+		{
+			horizSizer = new wxBoxSizer(wxHORIZONTAL);
+			
+			horizSizer->Add(entryText = new wxStaticText(parent, wxID_ANY,
+				wxString() << wxT("Opened the URL \"") << url << wxT("\"."), wxDefaultPosition, wxDefaultSize), wxSizerFlags(1).CenterVertical());
+			horizSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+			horizSizer->Add(copyURLButton = new wxButton(parent, wxID_ANY, wxT("Copy URL")));
+			this->Add(horizSizer, wxSizerFlags(1).Expand());
+
+			// this->SetSizerAndFit(horizSizer);
+		}
+	};
+	
+	class FileUploadActivityEntry : public ActivityEntry
+	{
+		// wxBoxSizer* vertSizer = nullptr;
+		wxStaticText* entryText = nullptr;
+		wxGauge* fileUploadProgress = nullptr;
+		wxBoxSizer* bottomButtonSizer = nullptr;
+		wxButton* openButton = nullptr;
+		wxButton* openFolderButton = nullptr;
+
+		wxFileName filename;
+		double uploadProgress = 0.0;
+		bool uploadCompleted = false;
+
+		wxString getEntryText() const
+		{
+			return wxString() << (this->uploadCompleted ? wxT("Uploaded \"") : wxT("Uploading \"")) << this->filename.GetFullPath() << wxT("\"")
+				<< (this->uploadCompleted ? wxT(".") : wxT("..."));
+		}
+
+		void updateProgressBar()
+		{
+			this->entryText->SetLabel(getEntryText());
+			
+			if(this->uploadCompleted)
+			{
+				this->fileUploadProgress->SetValue(this->fileUploadProgress->GetRange());
+			}
+			else
+			{
+				this->fileUploadProgress->SetValue(static_cast<int>(this->uploadProgress * (this->fileUploadProgress->GetRange()) / 100.0));
+			}
+		}
+	public:
+		FileUploadActivityEntry(wxWindow* parent, const wxString& filename, bool uploadCompleted = false, double uploadProgress = 0.0) : ActivityEntry(parent),
+		filename(filename), uploadCompleted(uploadCompleted), uploadProgress(uploadProgress)
+		{
+			// vertSizer = new wxBoxSizer(wxVERTICAL);
+			this->Add(entryText = new wxStaticText(parent, wxID_ANY, this->getEntryText()), wxSizerFlags(0).Expand());
+			this->Add(fileUploadProgress = new wxGauge(parent, wxID_ANY, 100));
+			this->Add(bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL));
+
+			bottomButtonSizer->Add(openButton = new wxButton(parent, wxID_OPEN));
+			bottomButtonSizer->Add(openFolderButton = new wxButton(parent, wxID_ANY, wxT("Open Folder")));
+
+			// this->SetSizerAndFit(vertSizer);
+		}
+
+		void setProgress(double progress)
+		{
+			this->uploadProgress = progress;
+			this->updateProgressBar();
+		}
+		
+		double getProgress() const
+		{
+			return this->uploadProgress;
+		}
+
+		void setCompleted(bool completed)
+		{
+			this->uploadCompleted = completed;
+			this->updateProgressBar();
+		}
+
+		bool getCompleted() const
+		{
+			return this->uploadCompleted;
+		}
+	};
+	
+	class ActivityList : public wxBoxSizer
+	{
+		wxWindow* parent = nullptr;
+		// wxBoxSizer* topLevelSizer = nullptr;
+		wxBoxSizer* noItemsElement = nullptr;
+		wxBoxSizer* items = nullptr;
+
+	public:
+		ActivityList(wxWindow* parent) : wxBoxSizer(wxVERTICAL), parent(parent)
+		{
+			// topLevelSizer = new wxBoxSizer(wxVERTICAL);
+			
+			noItemsElement = new wxBoxSizer(wxVERTICAL);
+			noItemsElement->Add(new wxStaticText(parent, wxID_ANY, wxT("No activity items")),
+				wxSizerFlags(1).Expand().Border(wxALL, 10));
+			this->Add(noItemsElement, wxSizerFlags(0).Expand());
+
+			items = new wxBoxSizer(wxVERTICAL);
+			this->Add(items, wxSizerFlags(0).Expand());
+			this->Hide(items, true);
+
+			// this->SetSizerAndFit(topLevelSizer);
+		}
+
+		void addActivity(ActivityEntry* entry)
+		{
+			// this->items->Add(new wxStaticText(parent, wxID_ANY, wxT("A test label.")), wxSizerFlags(0).Expand());
+			this->items->Add(entry, wxSizerFlags(0).Expand().Border(wxBOTTOM, DEFAULT_CONTROL_SPACING));
+			this->Hide(noItemsElement, true);
+			this->Show(items, true, true);
+			this->Layout();
+		}
+
+		void removeActivity(ActivityEntry* entry)
+		{
+			this->items->Detach(entry);
+			if(this->items->GetItemCount() == 0)
+			{
+				this->Hide(items, true);
+				this->Show(noItemsElement, true, true);
+				this->Layout();
+			}
+		}
+	};
+private:
+	wxBoxSizer* topLevelSizer = nullptr;
+	ActivityList* activityList = nullptr;
+
+public:
+	TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE)
+	{
+		topLevelSizer = new wxBoxSizer(wxVERTICAL);
+		topLevelSizer->Add(activityList = new ActivityList(this), wxSizerFlags(1).Expand());
+
+		this->SetSizerAndFit(topLevelSizer);
+	}
+
+	WebpageOpenedActivityEntry* addWebpageOpenedActivity(const wxString& url)
+	{
+		auto* newActivity = new WebpageOpenedActivityEntry(this, url);
+		this->activityList->addActivity(newActivity);
+		// this->topLevelSizer->Add(new wxStaticText(this, wxID_ANY, wxT("A test label.")), wxSizerFlags(0).Expand());
+		this->Layout();
+		this->Fit();
+		
+		return newActivity;
+	}
+
+	FileUploadActivityEntry* addFileUploadActivity(const wxFileName& filename)
+	{
+		auto* newActivity = new FileUploadActivityEntry(this, filename.GetFullPath());
+		this->activityList->addActivity(newActivity);
+
+		this->Layout();
+		this->Fit();
+
+		return newActivity;
 	}
 };
 
 class QuickOpenTaskbarIcon : public wxTaskBarIcon
 {
 	WriterReadersLock<AppConfig>& configRef;
+	TrayStatusWindow* statusWindow = nullptr;
 	
 	class TaskbarMenu : public wxMenu
 	{
@@ -405,10 +751,24 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 		return new TaskbarMenu(this->configRef);
 	}
 
+	void OnIconClick(wxTaskBarIconEvent& event)
+	{
+		this->statusWindow->SetPosition(wxGetMousePosition() - this->statusWindow->GetSize());
+		this->statusWindow->Show();
+	}
+
 public:
 	QuickOpenTaskbarIcon(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
 	{
 		this->SetIcon(wxIcon());
+		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
+
+		this->statusWindow = new TrayStatusWindow();
+	}
+
+	TrayStatusWindow* getTrayWindow() const
+	{
+		return this->statusWindow;
 	}
 };
 
@@ -419,7 +779,7 @@ wxEND_EVENT_TABLE()
 
 class QuickOpenApplication : public wxApp
 {
-	static WriterReadersLock<AppConfig>* configRef;
+	WriterReadersLock<AppConfig>* configRef = nullptr;
 	QuickOpenTaskbarIcon* icon = nullptr;
 	// QuickOpenSettings* settingsWindow = nullptr;
 public:
@@ -438,9 +798,14 @@ public:
 		return true;
 	}
 
-	static void setConfigRef(WriterReadersLock<AppConfig>& configRef)
+	void setConfigRef(WriterReadersLock<AppConfig>& configRef)
 	{
-		QuickOpenApplication::configRef = &configRef;
+		this->configRef = &configRef;
+	}
+
+	TrayStatusWindow* getTrayWindow() const
+	{
+		return this->icon->getTrayWindow();
 	}
 
 	int OnExit() override
@@ -453,8 +818,6 @@ public:
 		return 0;
 	}
 };
-
-WriterReadersLock<AppConfig>* QuickOpenApplication::configRef = nullptr;
 
 bool promptForWebpageOpen(std::string URL)
 {

@@ -241,9 +241,11 @@ public:
 class OpenWebpageAPIEndpoint : public CivetHandler
 {
 	WriterReadersLock<AppConfig>& configLock;
+	TrayStatusWindow* statusWindowRef;
 
 public:
-	OpenWebpageAPIEndpoint(WriterReadersLock<AppConfig>& configLock): configLock(configLock)
+	OpenWebpageAPIEndpoint(WriterReadersLock<AppConfig>& configLock, TrayStatusWindow* statusWindowRef): configLock(configLock),
+		statusWindowRef(statusWindowRef)
 	{}
 
 	
@@ -282,6 +284,11 @@ public:
 							startSubprocess(getBrowserCommandLine(readRef->browserID) + " \"" + wxURL + "\"");
 						}
 					}
+
+					wxGetApp().CallAfter([this, wxURL]
+					{
+						this->statusWindowRef->addWebpageOpenedActivity(wxURL);
+					});
 					
 					std::cout << "Will open " << wxURL << std::endl;
 					
@@ -358,32 +365,37 @@ public:
 			destPath.SetFullName(rqFileInfo.filename);
 		}
 		
-		std::optional<FileOpenSaveConsentDialog::ResultCode> resultCode;
-		std::condition_variable dialogResult;
-		std::mutex dialogResultMutex;
-		std::unique_lock<std::mutex> dialogResultLock(dialogResultMutex);
+		//std::optional<FileOpenSaveConsentDialog::ResultCode> resultCode;
+		//std::condition_variable dialogResult;
+		//std::mutex dialogResultMutex;
+		//std::unique_lock<std::mutex> dialogResultLock(dialogResultMutex);
 
-		wxGetApp().CallAfter([&dialogResultMutex, &dialogResult, &resultCode, &destPath, &rqFileInfo]
+		auto consentDlgLambda = [&destPath, &rqFileInfo]
 		{
 			auto consentDlg = FileOpenSaveConsentDialog(destPath, rqFileInfo.fileSize);
-			auto dlgResult = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
-			consentDlg.Show();
-			std::lock_guard<std::mutex> resultLock(dialogResultMutex);
-			resultCode = dlgResult;
-
-			if(resultCode == FileOpenSaveConsentDialog::ACCEPT)
-			{
-				rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
-			}
-			dialogResult.notify_all();
-		});
-
-		while(!resultCode.has_value())
-		{
-			dialogResult.wait(dialogResultLock);
-		}
+			auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
+			rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
+			return resultVal;
+		};
 		
-		if (resultCode.value() == FileOpenSaveConsentDialog::ACCEPT)
+		FileOpenSaveConsentDialog::ResultCode result =
+			wxCallAfterSync<QuickOpenApplication, decltype(consentDlgLambda), FileOpenSaveConsentDialog::ResultCode>(wxGetApp(), consentDlgLambda);
+		//wxGetApp().CallAfter([&dialogResultMutex, &dialogResult, &resultCode, &destPath, &rqFileInfo]
+		//{
+		//	auto consentDlg = FileOpenSaveConsentDialog(destPath, rqFileInfo.fileSize);
+		//	auto dlgResult = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
+		//	// consentDlg.Show();
+		//	std::lock_guard<std::mutex> resultLock(dialogResultMutex);
+		//	resultCode = dlgResult;
+
+		//	if(resultCode.value() == FileOpenSaveConsentDialog::ACCEPT)
+		//	{
+		//		rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
+		//	}
+		//	dialogResult.notify_all();
+		//});
+		
+		if (result == FileOpenSaveConsentDialog::ACCEPT)
 		{
 			// rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
 			ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
@@ -411,6 +423,7 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 	// WriterReadersLock<AppConfig>& configLock;
 	FileConsentTokenService& consentServiceRef;
 
+	/*
 	static int getFieldInfo(const char *key, const char *filename, char *path, size_t pathlen, void *user_data)
 	{
 		auto* consentedFileInfo = reinterpret_cast<RequestedFileInfo*>(user_data);
@@ -432,6 +445,7 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 		std::cout << "Wrote " << file_size << " bytes of data to " << path << std::endl;
 		return MG_FORM_FIELD_HANDLE_NEXT;
 	}
+	*/
 
 	//int readHalfBuffer(mg_connection* conn, char* buffer, size_t bufSize)
 	//{
@@ -524,9 +538,12 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 	//	//}
 	//}
 
-	bool MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize)
+	bool MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize,
+		TrayStatusWindow::FileUploadActivityEntry* uploadActivityEntryRef)
 	{
-		std::ofstream outFile(fileName.GetFullPath().ToStdWstring(), std::ofstream::binary);
+		std::ofstream outFile;
+		outFile.exceptions(std::ofstream::failbit);
+		outFile.open(fileName.GetFullPath().ToStdWstring(), std::ofstream::binary);
 
 		static const long long CHUNK_SIZE = 1LL << 20;
 		unsigned long long bytesWritten = 0;
@@ -543,14 +560,27 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 			}
 			
 			outFile.write(bodyBuffer, bytesRead);
+
+			wxGetApp().CallAfter([&uploadActivityEntryRef, bytesWritten, targetFileSize]
+			{
+				uploadActivityEntryRef->setProgress((static_cast<double>(bytesWritten) / targetFileSize) * 100.0);
+			});
 		}
 
+		wxGetApp().CallAfter([&uploadActivityEntryRef]
+		{
+			uploadActivityEntryRef->setCompleted(true);
+		});
+		
 		delete[] bodyBuffer;
 		outFile.close();
 		return bytesWritten == targetFileSize;
 	}
+
+	TrayStatusWindow* statusWindow = nullptr;
 public:
-	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef) : consentServiceRef(consentServiceRef)
+	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef, TrayStatusWindow* statusWindow) : consentServiceRef(consentServiceRef),
+		statusWindow(statusWindow)
 	{}
 	
 	bool handlePost(CivetServer* server, mg_connection* conn) override
@@ -604,8 +634,17 @@ public:
 				//	destPath = wxFileName(configRef->fileSavePath);
 				//	destPath.SetFullName(consentedFileInfo.filename);
 				//}
+
+				// TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = nullptr;
+				auto createActivity = [this, consentedFileInfo]
+				{
+					return this->statusWindow->addFileUploadActivity(consentedFileInfo.consentedFileName);
+				};
 				
-				if(MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize))
+				TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = 
+					wxCallAfterSync<QuickOpenApplication, decltype(createActivity), TrayStatusWindow::FileUploadActivityEntry*>(wxGetApp(), createActivity);
+				
+				if(MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize, activityEntryRef))
 				{
 					mg_send_http_ok(conn, "text/plain", 0);
 				}
@@ -684,21 +723,28 @@ int main(int argc, char** argv)
 	// CivetCallbacks serverCallbacks;
 	// serverCallbacks.begin_request
 
+	wxEntryStart(argc, argv);
+	QuickOpenApplication& appGUI = wxGetApp();
+	appGUI.setConfigRef(wrLock);
+	appGUI.CallOnInit();
+	
 	CivetServer server(options);
 	TestHandler testHandler;
 	StaticHandler staticHandler("/");
-	OpenWebpageAPIEndpoint webpageAPIEndpoint(wrLock);
+	OpenWebpageAPIEndpoint webpageAPIEndpoint(wrLock, appGUI.getTrayWindow());
 	FileConsentTokenService fileConsentTokenService(wrLock);
-	OpenSaveFileAPIEndpoint fileAPIEndpoint(fileConsentTokenService);
+	OpenSaveFileAPIEndpoint fileAPIEndpoint(fileConsentTokenService, appGUI.getTrayWindow());
 	
 	server.addHandler("/test", testHandler);
 	server.addHandler("/", staticHandler);
 	server.addHandler("/api/openWebpage", webpageAPIEndpoint);
 	server.addHandler("/api/openSaveFile", fileAPIEndpoint);
 	server.addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);
-	
-	wxGetApp().setConfigRef(wrLock);
-	wxEntry(argc, argv);
 
+	// appGUI.getTrayWindow()->addWebpageOpenedActivity(wxT("foo.com"));
+	// appGUI.getTrayWindow()->addWebpageOpenedActivity(wxT("bar.com"));
+	appGUI.OnRun();
+
+	wxEntryCleanup();
 	mg_exit_library();
 }
