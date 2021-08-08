@@ -266,3 +266,35 @@ std::filesystem::path UTF8StrToPath(const std::string& UTF8Str)
 {
 	return std::filesystem::path(UTF8StrToWideStr(UTF8Str));
 }
+
+void shellExecuteFile(const wxFileName& filePath, const wxWindow* window = nullptr)
+{
+	HWND windowHandle = nullptr;
+	if(window != nullptr)
+	{
+		windowHandle = window->GetHWND();
+	}
+	
+	ShellExecute(windowHandle, TEXT("open"), wxStringToTString(filePath.GetFullPath()).c_str(), nullptr, wxStringToTString(filePath.GetPath()).c_str(), SW_SHOWNORMAL);
+	handleWinAPIError(ERROR_SUCCESS);
+}
+
+void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile = nullptr)
+{
+	wxString winDirStr;
+	wxFileName winDir;
+	wxGetEnv(wxT("windir"), &winDirStr);
+	winDir.AssignDir(winDirStr);
+	
+	wxFileName explorerPath(winDir);
+	explorerPath.SetName(wxT("explorer.exe"));
+	
+	if(selectedFile != nullptr)
+	{
+		startSubprocess(wxString() << wxT("\"") << explorerPath.GetFullPath() << wxT("\" /select,\"") << selectedFile->GetFullPath() << wxT("\""));
+	}
+	else
+	{
+		startSubprocess(wxString() << wxT("\"") << explorerPath.GetFullPath() << wxT("\" /select,\"") << folder.GetFullPath() << wxT("\""));
+	}
+}

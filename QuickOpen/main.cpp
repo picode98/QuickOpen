@@ -561,13 +561,13 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 			
 			outFile.write(bodyBuffer, bytesRead);
 
-			wxGetApp().CallAfter([&uploadActivityEntryRef, bytesWritten, targetFileSize]
+			wxGetApp().CallAfter([uploadActivityEntryRef, bytesWritten, targetFileSize]
 			{
 				uploadActivityEntryRef->setProgress((static_cast<double>(bytesWritten) / targetFileSize) * 100.0);
 			});
 		}
 
-		wxGetApp().CallAfter([&uploadActivityEntryRef]
+		wxGetApp().CallAfter([uploadActivityEntryRef]
 		{
 			uploadActivityEntryRef->setCompleted(true);
 		});

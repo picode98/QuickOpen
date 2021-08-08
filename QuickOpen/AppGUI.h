@@ -18,6 +18,7 @@
 #include <wx/filepicker.h>
 #include <wx/spinctrl.h>
 #include <wx/richtooltip.h>
+#include <wx/clipbrd.h>
 //#include <wx/gauge.h>
 // #include <wx/scrolwin.h>
 
@@ -196,6 +197,47 @@ ResultType wxCallAfterSync(AppType& app, FuncType func)
 
 	return resultVal.value();
 }
+
+class ProgressBarWithText : public wxBoxSizer
+{
+	wxGauge* progressBar = nullptr;
+	wxStaticText* progressText = nullptr;
+
+	int gaugeValue = 0;
+	int gaugeRange = 100;
+
+	double progress = 0.0;
+
+	wxString getText()
+	{
+		return wxString::Format("%.1f%%", this->progress);
+	}
+public:
+	ProgressBarWithText(wxWindow* parent, double progress = 0.0): wxBoxSizer(wxHORIZONTAL), progress(progress), gaugeValue(static_cast<int>(progress * gaugeRange))
+	{
+		this->Add(progressBar = new wxGauge(parent, wxID_ANY, gaugeRange), wxSizerFlags(1).Expand());
+		this->AddSpacer(DEFAULT_CONTROL_SPACING);
+		this->Add(progressText = new wxStaticText(parent, wxID_ANY, this->getText()), wxSizerFlags(0).CenterVertical());
+	}
+
+	void setValue(int value)
+	{
+		this->gaugeValue = value;
+		this->progress = (value * 100.0) / gaugeRange;
+
+		this->progressBar->SetValue(gaugeValue);
+		this->progressText->SetLabel(getText());
+	}
+
+	void setProgress(double progress)
+	{
+		this->gaugeValue = static_cast<int>(std::round((progress / 100.0) * gaugeRange));
+		this->progress = progress;
+
+		this->progressBar->SetValue(gaugeValue);
+		this->progressText->SetLabel(getText());
+	}
+};
 
 class QuickOpenSettings : public wxFrame
 {
@@ -545,8 +587,18 @@ public:
 		wxBoxSizer* horizSizer = nullptr;
 		wxStaticText* entryText = nullptr;
 		wxButton* copyURLButton = nullptr;
+		wxString URL;
+
+		void OnCopyURLButtonClick(wxCommandEvent& event)
+		{
+			if(wxTheClipboard->Open())
+			{
+				wxTheClipboard->SetData(new wxURLDataObject(URL));
+				wxTheClipboard->Close();
+			}
+		}
 	public:
-		WebpageOpenedActivityEntry(wxWindow* parent, const wxString& url) : ActivityEntry(parent)
+		WebpageOpenedActivityEntry(wxWindow* parent, const wxString& url) : ActivityEntry(parent), URL(url)
 		{
 			horizSizer = new wxBoxSizer(wxHORIZONTAL);
 			
@@ -556,22 +608,27 @@ public:
 			horizSizer->Add(copyURLButton = new wxButton(parent, wxID_ANY, wxT("Copy URL")));
 			this->Add(horizSizer, wxSizerFlags(1).Expand());
 
+			copyURLButton->Bind(wxEVT_BUTTON, &WebpageOpenedActivityEntry::OnCopyURLButtonClick, this);
+
 			// this->SetSizerAndFit(horizSizer);
 		}
 	};
 	
 	class FileUploadActivityEntry : public ActivityEntry
 	{
+		wxWindow* parent = nullptr;
+		
 		// wxBoxSizer* vertSizer = nullptr;
 		wxStaticText* entryText = nullptr;
-		wxGauge* fileUploadProgress = nullptr;
+		ProgressBarWithText* fileUploadProgress = nullptr;
 		wxBoxSizer* bottomButtonSizer = nullptr;
 		wxButton* openButton = nullptr;
 		wxButton* openFolderButton = nullptr;
 
 		wxFileName filename;
 		double uploadProgress = 0.0;
-		bool uploadCompleted = false;
+		bool uploadCompleted = false,
+			openWhenDone = false;
 
 		wxString getEntryText() const
 		{
@@ -585,25 +642,78 @@ public:
 			
 			if(this->uploadCompleted)
 			{
-				this->fileUploadProgress->SetValue(this->fileUploadProgress->GetRange());
+				this->fileUploadProgress->setProgress(100.0);
 			}
 			else
 			{
-				this->fileUploadProgress->SetValue(static_cast<int>(this->uploadProgress * (this->fileUploadProgress->GetRange()) / 100.0));
+				this->fileUploadProgress->setProgress(this->uploadProgress);
+			}
+		}
+
+		void triggerOpen()
+		{
+			shellExecuteFile(this->filename, this->parent);
+		}
+
+		void updateOpenButtonText()
+		{
+			wxString newText;
+
+			if(this->uploadCompleted)
+			{
+				newText = wxT("Open");
+			}
+			else
+			{
+				newText = (this->openWhenDone ? wxT("Don't Open When Done") : wxT("Open When Done"));
+			}
+			
+			this->openButton->SetLabel(newText);
+		}
+
+		void OnOpenButtonClicked(wxCommandEvent& event)
+		{
+			if(this->uploadCompleted)
+			{
+				triggerOpen();
+			}
+			else
+			{
+				this->openWhenDone = !this->openWhenDone;
+				updateOpenButtonText();
+			}
+		}
+
+		void OnOpenFolderButtonClicked(wxCommandEvent& event)
+		{
+			wxFileName folderToOpen(this->filename);
+			folderToOpen.SetName(wxT(""));
+			
+			if(this->uploadCompleted)
+			{
+				openExplorerFolder(folderToOpen, &this->filename);
+			}
+			else
+			{
+				openExplorerFolder(folderToOpen);
 			}
 		}
 	public:
 		FileUploadActivityEntry(wxWindow* parent, const wxString& filename, bool uploadCompleted = false, double uploadProgress = 0.0) : ActivityEntry(parent),
-		filename(filename), uploadCompleted(uploadCompleted), uploadProgress(uploadProgress)
+		parent(parent), filename(filename), uploadCompleted(uploadCompleted), uploadProgress(uploadProgress)
 		{
 			// vertSizer = new wxBoxSizer(wxVERTICAL);
 			this->Add(entryText = new wxStaticText(parent, wxID_ANY, this->getEntryText()), wxSizerFlags(0).Expand());
-			this->Add(fileUploadProgress = new wxGauge(parent, wxID_ANY, 100));
+			this->Add(fileUploadProgress = new ProgressBarWithText(parent));
 			this->Add(bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL));
 
-			bottomButtonSizer->Add(openButton = new wxButton(parent, wxID_OPEN));
+			bottomButtonSizer->Add(openButton = new wxButton(parent, wxID_ANY, wxT("Open When Done")));
 			bottomButtonSizer->Add(openFolderButton = new wxButton(parent, wxID_ANY, wxT("Open Folder")));
 
+			openButton->Bind(wxEVT_BUTTON, &FileUploadActivityEntry::OnOpenButtonClicked, this);
+			openFolderButton->Bind(wxEVT_BUTTON, &FileUploadActivityEntry::OnOpenFolderButtonClicked, this);
+			updateOpenButtonText();
+			
 			// this->SetSizerAndFit(vertSizer);
 		}
 
@@ -622,6 +732,12 @@ public:
 		{
 			this->uploadCompleted = completed;
 			this->updateProgressBar();
+			this->updateOpenButtonText();
+
+			if(completed && this->openWhenDone)
+			{
+				triggerOpen();
+			}
 		}
 
 		bool getCompleted() const
