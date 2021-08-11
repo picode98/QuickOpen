@@ -178,6 +178,30 @@ std::map<std::string, std::string> parseQueryString(mg_connection* conn)
 	return resultMap;
 }
 
+struct FormErrorList
+{
+	struct FormError
+	{
+		std::string fieldName,
+			errorString;
+		
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(FormError, fieldName, errorString)
+	};
+
+	std::vector<FormError> errors;
+
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(FormErrorList, errors)
+};
+
+void sendJSONResponse(mg_connection* conn, int status, const nlohmann::json& json)
+{
+	mg_response_header_start(conn, status);
+	mg_response_header_add(conn, "Content-Type", "application/json", -1);
+	mg_response_header_send(conn);
+	std::string jsonString = json.dump();
+	mg_write(conn, jsonString.c_str(), jsonString.size());
+}
+
 class TestHandler : public CivetHandler
 {
 	bool handleGet(CivetServer* server, mg_connection* conn) override
@@ -297,17 +321,27 @@ public:
 				}
 				else
 				{
-					mg_send_http_error(conn, 403, "Opening of the webpage was denied by the user.");
+					auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+						{ "", "Opening of the webpage was denied by the user." }
+					} });
+					sendJSONResponse(conn, 403, jsonErrorInfo);
 				}
 			}
 			else
 			{
-				mg_send_http_error(conn, 400, "Argument for parameter \"url\" is not a valid HTTP/HTTPS URL.");
+				auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+					{ "url", "This URL is not valid." }
+				} });
+
+				sendJSONResponse(conn, 400, jsonErrorInfo);
 			}
 		}
 		else
 		{
-			mg_send_http_error(conn, 400, "Argument for parameter \"url\" is missing from request.");
+			auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+					{ "url", "The URL is missing." }
+				} });
+			sendJSONResponse(conn, 400, jsonErrorInfo);
 		}
 
 		return true;
@@ -411,7 +445,10 @@ public:
 		}
 		else
 		{
-			mg_send_http_error(conn, 403, "The user declined to receive the file.");
+			auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+					{ "uploadFile", "The user declined to receive the file." }
+			} });
+			sendJSONResponse(conn, 403, jsonErrorInfo);
 		}
 
 		return true;
@@ -538,43 +575,66 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 	//	//}
 	//}
 
-	bool MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize,
+	class IncorrectFileLengthException : std::exception
+	{};
+
+	void MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize,
 		TrayStatusWindow::FileUploadActivityEntry* uploadActivityEntryRef)
 	{
-		std::ofstream outFile;
-		outFile.exceptions(std::ofstream::failbit);
-		outFile.open(fileName.GetFullPath().ToStdWstring(), std::ofstream::binary);
-
 		static const long long CHUNK_SIZE = 1LL << 20;
 		unsigned long long bytesWritten = 0;
-		char* bodyBuffer = new char[CHUNK_SIZE];
+		auto bodyBuffer = std::make_unique<char[]>(CHUNK_SIZE);
+		
+		std::ofstream outFile;
+		outFile.exceptions(std::ofstream::failbit);
 
-		int bytesRead;
-		while ((bytesRead = mg_read(conn, bodyBuffer, CHUNK_SIZE)) > 0)
+		try
 		{
-			bytesWritten += bytesRead;
+			outFile.open(fileName.GetFullPath().ToStdWstring(), std::ofstream::binary);
 
-			if(bytesWritten > targetFileSize)
+			int bytesRead;
+			while ((bytesRead = mg_read(conn, bodyBuffer.get(), CHUNK_SIZE)) > 0)
 			{
-				break;
+				bytesWritten += bytesRead;
+
+				if(bytesWritten > targetFileSize)
+				{
+					throw IncorrectFileLengthException();
+				}
+				
+				outFile.write(bodyBuffer.get(), bytesRead);
+
+				wxGetApp().CallAfter([uploadActivityEntryRef, bytesWritten, targetFileSize]
+				{
+					uploadActivityEntryRef->setProgress((static_cast<double>(bytesWritten) / targetFileSize) * 100.0);
+				});
 			}
-			
-			outFile.write(bodyBuffer, bytesRead);
 
-			wxGetApp().CallAfter([uploadActivityEntryRef, bytesWritten, targetFileSize]
+			wxGetApp().CallAfter([uploadActivityEntryRef]
 			{
-				uploadActivityEntryRef->setProgress((static_cast<double>(bytesWritten) / targetFileSize) * 100.0);
+				uploadActivityEntryRef->setCompleted(true);
 			});
 		}
-
-		wxGetApp().CallAfter([uploadActivityEntryRef]
+		catch (const std::ios_base::failure& ex)
 		{
-			uploadActivityEntryRef->setCompleted(true);
-		});
+#ifdef WIN32
+			WindowsException detailedError = getWinAPIError(ERROR_SUCCESS);
+#endif
+			wxGetApp().CallAfter([uploadActivityEntryRef, detailedError]
+			{
+				uploadActivityEntryRef->setError(&detailedError);
+			});
+
+			throw detailedError;
+		}
 		
-		delete[] bodyBuffer;
+		// delete[] bodyBuffer;
 		outFile.close();
-		return bytesWritten == targetFileSize;
+
+		if(bytesWritten != targetFileSize)
+		{
+			throw IncorrectFileLengthException();
+		}
 	}
 
 	TrayStatusWindow* statusWindow = nullptr;
@@ -644,24 +704,42 @@ public:
 				TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = 
 					wxCallAfterSync<QuickOpenApplication, decltype(createActivity), TrayStatusWindow::FileUploadActivityEntry*>(wxGetApp(), createActivity);
 				
-				if(MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize, activityEntryRef))
+				try
 				{
+					MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize, activityEntryRef);
 					mg_send_http_ok(conn, "text/plain", 0);
 				}
-				else
+				catch(const std::system_error& ex)
 				{
-					mg_send_http_error(conn, 400, "The file sent did not have the length specified by the consent token used.");
+					auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+						{"uploadFile", std::string("An error occurred while attempting to write the file: ") + ex.what()}
+					} });
+					sendJSONResponse(conn, 500, jsonErrorInfo);
 				}
-				// parseMultipartBodyChunked(conn);
+				catch (const IncorrectFileLengthException&)
+				{
+					auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+						{"uploadFile", "The file sent did not have the length specified by the consent token used."}
+					} });
+					sendJSONResponse(conn, 400, jsonErrorInfo);
+				}
 			}
 			else
 			{
-				mg_send_http_error(conn, 403, "The consent token provided was not valid.");
+				// mg_send_http_error(conn, 403, "The consent token provided was not valid.");
+				auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+						{"consentToken", "The consent token provided was not valid."}
+					} });
+				sendJSONResponse(conn, 403, jsonErrorInfo);
 			}
 		}
 		else
 		{
-			mg_send_http_error(conn, 401, "No consent token was provided.");
+			// mg_send_http_error(conn, 401, "No consent token was provided.");
+			auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+						{"consentToken", "No consent token was provided."}
+					} });
+			sendJSONResponse(conn, 401, jsonErrorInfo);
 		}
 		
 		return true;

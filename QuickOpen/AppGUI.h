@@ -19,6 +19,7 @@
 #include <wx/spinctrl.h>
 #include <wx/richtooltip.h>
 #include <wx/clipbrd.h>
+#include <wx/statline.h>
 //#include <wx/gauge.h>
 // #include <wx/scrolwin.h>
 
@@ -213,6 +214,8 @@ class ProgressBarWithText : public wxBoxSizer
 		return wxString::Format("%.1f%%", this->progress);
 	}
 public:
+	static const wxColour ERROR_COLOR;
+	
 	ProgressBarWithText(wxWindow* parent, double progress = 0.0): wxBoxSizer(wxHORIZONTAL), progress(progress), gaugeValue(static_cast<int>(progress * gaugeRange))
 	{
 		this->Add(progressBar = new wxGauge(parent, wxID_ANY, gaugeRange), wxSizerFlags(1).Expand());
@@ -237,7 +240,14 @@ public:
 		this->progressBar->SetValue(gaugeValue);
 		this->progressText->SetLabel(getText());
 	}
+
+	void setErrorStyle()
+	{
+		this->progressBar->SetForegroundColour(ERROR_COLOR);
+		this->progressText->SetForegroundColour(ERROR_COLOR);
+	}
 };
+const wxColour ProgressBarWithText::ERROR_COLOR = wxColour(wxT("red"));
 
 class QuickOpenSettings : public wxFrame
 {
@@ -578,6 +588,8 @@ public:
 	class ActivityEntry : public wxBoxSizer
 	{
 	public:
+		wxStaticLine* topSeparator = nullptr;
+		
 		ActivityEntry(wxWindow* parent) : wxBoxSizer(wxVERTICAL)
 		{}
 	};
@@ -624,6 +636,7 @@ public:
 		wxBoxSizer* bottomButtonSizer = nullptr;
 		wxButton* openButton = nullptr;
 		wxButton* openFolderButton = nullptr;
+		wxStaticText* errorText = nullptr;
 
 		wxFileName filename;
 		double uploadProgress = 0.0;
@@ -704,15 +717,20 @@ public:
 		{
 			// vertSizer = new wxBoxSizer(wxVERTICAL);
 			this->Add(entryText = new wxStaticText(parent, wxID_ANY, this->getEntryText()), wxSizerFlags(0).Expand());
-			this->Add(fileUploadProgress = new ProgressBarWithText(parent));
+			this->AddSpacer(DEFAULT_CONTROL_SPACING);
+			this->Add(fileUploadProgress = new ProgressBarWithText(parent), wxSizerFlags(0).Expand());
+			this->AddSpacer(DEFAULT_CONTROL_SPACING);
 			this->Add(bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL));
 
 			bottomButtonSizer->Add(openButton = new wxButton(parent, wxID_ANY, wxT("Open When Done")));
+			bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 			bottomButtonSizer->Add(openFolderButton = new wxButton(parent, wxID_ANY, wxT("Open Folder")));
 
 			openButton->Bind(wxEVT_BUTTON, &FileUploadActivityEntry::OnOpenButtonClicked, this);
 			openFolderButton->Bind(wxEVT_BUTTON, &FileUploadActivityEntry::OnOpenFolderButtonClicked, this);
 			updateOpenButtonText();
+			this->Add(errorText = new wxStaticText(parent, wxID_ANY, wxT("")));
+			this->Hide(errorText);
 			
 			// this->SetSizerAndFit(vertSizer);
 		}
@@ -744,87 +762,149 @@ public:
 		{
 			return this->uploadCompleted;
 		}
+
+		void setError(const std::exception* error)
+		{
+			const auto* systemErrorPtr = dynamic_cast<const std::system_error*>(error);
+
+			if(systemErrorPtr != nullptr)
+			{
+				errorText->SetLabel(wxString() << wxT("An error occurred (error code ") << systemErrorPtr->code().value() << wxT("): ") << systemErrorPtr->what());
+			}
+			else
+			{
+				errorText->SetLabel(wxString() << wxT("An error occurred: ") << error->what());
+			}
+			fileUploadProgress->setErrorStyle();
+		}
 	};
 	
-	class ActivityList : public wxBoxSizer
+	class ActivityList : public wxScrolledWindow
 	{
-		wxWindow* parent = nullptr;
-		// wxBoxSizer* topLevelSizer = nullptr;
+		// wxWindow* parent = nullptr;
+		wxBoxSizer* topLevelSizer = nullptr;
 		wxBoxSizer* noItemsElement = nullptr;
 		wxBoxSizer* items = nullptr;
 
+		//void OnScroll(wxScrollWinEvent& event)
+		//{
+		//	this->Refresh();
+		//}
+
 	public:
-		ActivityList(wxWindow* parent) : wxBoxSizer(wxVERTICAL), parent(parent)
+		ActivityList(wxWindow* parent) : wxScrolledWindow(parent)
 		{
-			// topLevelSizer = new wxBoxSizer(wxVERTICAL);
+			topLevelSizer = new wxBoxSizer(wxVERTICAL);
 			
 			noItemsElement = new wxBoxSizer(wxVERTICAL);
-			noItemsElement->Add(new wxStaticText(parent, wxID_ANY, wxT("No activity items")),
+			noItemsElement->Add(new wxStaticText(this, wxID_ANY, wxT("No activity items. This is some text to test scrolling.")),
 				wxSizerFlags(1).Expand().Border(wxALL, 10));
-			this->Add(noItemsElement, wxSizerFlags(0).Expand());
+			topLevelSizer->Add(noItemsElement, wxSizerFlags(0).Expand());
 
 			items = new wxBoxSizer(wxVERTICAL);
-			this->Add(items, wxSizerFlags(0).Expand());
-			this->Hide(items, true);
+			topLevelSizer->Add(items, wxSizerFlags(0).Expand());
+			topLevelSizer->Hide(items, true);
+			topLevelSizer->Layout();
 
+			this->SetSizer(topLevelSizer);
+			this->FitInside();
+			this->SetScrollRate(5, 5);
+			// this->Refresh();
+			// this->Bind(EVT_SCROLLWIN(), &ActivityList::OnScroll, this);
 			// this->SetSizerAndFit(topLevelSizer);
 		}
 
 		void addActivity(ActivityEntry* entry)
 		{
+			wxStaticLine* separator = nullptr;
+			if(!this->items->IsEmpty())
+			{
+				this->items->Add(separator = new wxStaticLine(this), wxSizerFlags(0).Expand().Border(wxTOP | wxBOTTOM, DEFAULT_CONTROL_SPACING));
+			}
+			
 			// this->items->Add(new wxStaticText(parent, wxID_ANY, wxT("A test label.")), wxSizerFlags(0).Expand());
 			this->items->Add(entry, wxSizerFlags(0).Expand().Border(wxBOTTOM, DEFAULT_CONTROL_SPACING));
-			this->Hide(noItemsElement, true);
-			this->Show(items, true, true);
+			entry->topSeparator = separator;
+			topLevelSizer->Hide(noItemsElement, true);
+			topLevelSizer->Show(items, true, true);
 			this->Layout();
 		}
 
 		void removeActivity(ActivityEntry* entry)
 		{
 			this->items->Detach(entry);
+			if(entry->topSeparator != nullptr)
+			{
+				this->items->Detach(entry->topSeparator);
+				entry->topSeparator->Destroy();
+				entry->topSeparator = nullptr;
+			}
+			
 			if(this->items->GetItemCount() == 0)
 			{
-				this->Hide(items, true);
-				this->Show(noItemsElement, true, true);
+				topLevelSizer->Hide(items, true);
+				topLevelSizer->Show(noItemsElement, true, true);
 				this->Layout();
 			}
 		}
+
+		// wxDECLARE_EVENT_TABLE();
 	};
 private:
 	wxBoxSizer* topLevelSizer = nullptr;
 	ActivityList* activityList = nullptr;
 
+	void OnWindowActivationChanged(wxActivateEvent& event)
+	{
+		if(!event.GetActive())
+		{
+			this->Hide();
+		}
+		
+		event.Skip();
+	}
+
 public:
-	TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE)
+	TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition, wxSize(300, 300))
 	{
 		topLevelSizer = new wxBoxSizer(wxVERTICAL);
 		topLevelSizer->Add(activityList = new ActivityList(this), wxSizerFlags(1).Expand());
 
-		this->SetSizerAndFit(topLevelSizer);
+		this->SetSizer(topLevelSizer);
 	}
 
 	WebpageOpenedActivityEntry* addWebpageOpenedActivity(const wxString& url)
 	{
-		auto* newActivity = new WebpageOpenedActivityEntry(this, url);
+		auto* newActivity = new WebpageOpenedActivityEntry(this->activityList, url);
 		this->activityList->addActivity(newActivity);
 		// this->topLevelSizer->Add(new wxStaticText(this, wxID_ANY, wxT("A test label.")), wxSizerFlags(0).Expand());
 		this->Layout();
-		this->Fit();
+		// this->Fit();
 		
 		return newActivity;
 	}
 
 	FileUploadActivityEntry* addFileUploadActivity(const wxFileName& filename)
 	{
-		auto* newActivity = new FileUploadActivityEntry(this, filename.GetFullPath());
+		auto* newActivity = new FileUploadActivityEntry(this->activityList, filename.GetFullPath());
 		this->activityList->addActivity(newActivity);
 
 		this->Layout();
-		this->Fit();
+		// this->Fit();
 
 		return newActivity;
 	}
+
+	wxDECLARE_EVENT_TABLE();
 };
+
+wxBEGIN_EVENT_TABLE(TrayStatusWindow, wxFrame)
+	EVT_ACTIVATE(TrayStatusWindow::OnWindowActivationChanged)
+wxEND_EVENT_TABLE()
+
+//wxBEGIN_EVENT_TABLE(TrayStatusWindow::ActivityList, wxScrolledWindow)
+//	EVT_SCROLLWIN(TrayStatusWindow::ActivityList::OnScroll)
+//wxEND_EVENT_TABLE()
 
 class QuickOpenTaskbarIcon : public wxTaskBarIcon
 {
@@ -871,6 +951,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 	{
 		this->statusWindow->SetPosition(wxGetMousePosition() - this->statusWindow->GetSize());
 		this->statusWindow->Show();
+		this->statusWindow->SetFocus();
 	}
 
 public:
@@ -907,6 +988,16 @@ public:
 		// mg_exit_library();
 		//
 
+		//wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
+		//auto* frame = new wxFrame((wxFrame *)NULL, -1, wxT("Scrolling Widgets"), wxPoint(50, 50), wxSize(650, 650));
+
+		//auto* my_image = new TrayStatusWindow::ActivityList(frame);
+		//sizer->Add(my_image, 1, wxEXPAND);
+		//frame->SetSizer(sizer);
+
+		//frame->Show();
+		//return true;
+		
 		assert(configRef != nullptr);
 		this->icon = new QuickOpenTaskbarIcon(*configRef);
 		// this->settingsWindow->Show();

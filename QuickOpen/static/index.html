@@ -1,18 +1,54 @@
 <HTML>
 <HEAD>
     <META NAME="GENERATOR" Content="Microsoft Visual Studio">
+    <style type="text/css">
+        .form-error {
+            border: 2px solid red;
+        }
+
+        .form-errors {
+            border: 1px solid red;
+            background-color: pink;
+            border-radius: 5px;
+        }
+    </style>
     <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.js"></script>
     <script type="text/javascript">
         $(() => {
+            function resetFormErrors(formElement)
+            {
+                $(formElement).find('input').removeClass('form-error');
+                $(formElement).children('.form-errors').hide().children('.form-error-list').empty();
+            }
+
+            function displayFormErrors(formElement, data)
+            {
+                data.errors.forEach(thisError =>
+                {
+                    if (thisError.fieldName)
+                    {
+                        $(formElement).find(`input[name='${thisError.fieldName}']`).addClass('form-error');
+                    }
+                    $(formElement).children('.form-errors').show().children('.form-error-list')
+                        .append($('<li></li>').text(thisError.errorString));
+                });
+            }
+
+
             $('#open-webpage-form').submit(e =>
             {
                 e.preventDefault();
                 $('#open-url-button').prop('disabled', true);
                 $('#open-webpage-result-text').text('Please wait...');
+
+                resetFormErrors($('#open-webpage-form'));
+
                 $.post('/api/openWebpage', { url: $('#url-text-input').val() }).done(() => {
                     $('#open-webpage-result-text').text('Webpage opened successfully.');
-                }).fail((jqXHR, textStatus, errorThrown) => {
-                    $('#open-webpage-result-text').text('An error occurred: ' + errorThrown);
+                }).fail((jqXHR, textStatus, errorThrown) =>
+                {
+                    displayFormErrors($('#open-webpage-form'), jqXHR.responseJSON);
+                    $('#open-webpage-result-text').text('');
                 }).always(() => {
                     $('#open-url-button').prop('disabled', false);
                 });
@@ -21,6 +57,7 @@
             $('#open-save-file-form').submit(e =>
             {
                 e.preventDefault();
+                resetFormErrors($('#open-save-file-form'));
 
                 // let formData = new FormData($('#open-save-file-form')[0]);
 
@@ -39,7 +76,13 @@
                     }).done(() =>
                     {
                         alert('File uploaded.');
+                    }).fail((jqXHR, textStatus, errorThrown) =>
+                    {
+                        displayFormErrors($('#open-save-file-form'), jqXHR.responseJSON);
                     });
+                }).fail((jqXHR, textStatus, errorThrown) =>
+                {
+                    displayFormErrors($('#open-save-file-form'), jqXHR.responseJSON);
                 });
             });
 
@@ -54,14 +97,22 @@
 <h1>QuickOpen</h1>
 <p>Enter a URL below to open it:</p>
 <form id="open-webpage-form">
-    <input id="url-text-input" type="url" placeholder="Enter a URL..." required/>
+    <input id="url-text-input" name="url" type="url" placeholder="Enter a URL..." required/>
     <button id="open-url-button" type="submit">Open</button>
     <span id="open-webpage-result-text"></span>
+    <div class="form-errors" style="display: none;">
+        <p>The following errors were encountered:</p>
+        <ul class="form-error-list"></ul>
+    </div>
 </form>
 <p>or select a file below to open it:</p>
 <form id="open-save-file-form">
     <input id="uploadFile" name="uploadFile" type="file" />
     <button type="submit">Open File</button>
+    <div class="form-errors" style="display: none;">
+        <p>The following errors were encountered:</p>
+        <ul class="form-error-list"></ul>
+    </div>
 </form>
 </BODY>
 </HTML>

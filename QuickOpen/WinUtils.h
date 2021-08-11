@@ -14,47 +14,6 @@ typedef std::wstring tstring;
 typedef std::string tstring;
 #endif
 
-class WindowsException : public std::exception
-{
-public:
-	DWORD errorCode;
-	tstring description;
-
-	WindowsException(DWORD errorCode, const tstring& description): errorCode(errorCode), description(description)
-	{}
-};
-
-void handleWinAPIError(LSTATUS retVal)
-{
-	DWORD lastError = retVal;
-	if (lastError == ERROR_SUCCESS) lastError = GetLastError();
-	
-	if(lastError != ERROR_SUCCESS)
-	{
-		TCHAR* errorStrPtr;
-		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, lastError,
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&errorStrPtr), 0, nullptr);
-		tstring errorDesc(errorStrPtr);
-		LocalFree(errorStrPtr);
-		
-		throw WindowsException(lastError, errorDesc);
-	}
-}
-
-tstring readRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName)
-{
-	SetLastError(ERROR_SUCCESS);
-	HKEY URLAssocHandle = nullptr;
-	auto keyType = REG_NONE;
-	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_READ, &URLAssocHandle));
-	DWORD reqBufSize(0);
-	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, nullptr, &reqBufSize));
-	std::basic_string<BYTE> str(reqBufSize, BYTE(0));
-	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, str.data(), &reqBufSize));
-
-	return tstring(reinterpret_cast<const TCHAR*>(str.c_str()));
-}
-
 std::wstring UTF8StrToWideStr(const std::string& UTF8Str)
 {
 	int reqBufSize = MultiByteToWideChar(CP_UTF8, 0, UTF8Str.c_str(), UTF8Str.size(), nullptr, 0);
@@ -73,6 +32,12 @@ std::string WideStrToUTF8Str(const std::wstring& wideStr)
 	return str;
 }
 
+#ifdef UNICODE
+#define TStringToUTF8String WideStrToUTF8Str
+#else
+#define TStringToUTF8String(str) str
+#endif
+
 tstring wxStringToTString(const wxString& str)
 {
 #ifdef UNICODE
@@ -80,6 +45,57 @@ tstring wxStringToTString(const wxString& str)
 #else
 	return str.ToStdString();
 #endif
+}
+
+class WindowsException : public std::system_error
+{
+public:
+	WindowsException(DWORD errorCode, const tstring& description): system_error(errorCode, std::system_category(), TStringToUTF8String(description))
+	{}
+};
+
+WindowsException getWinAPIError(LSTATUS retVal)
+{
+	DWORD lastError = retVal;
+	if (lastError == ERROR_SUCCESS) lastError = GetLastError();
+
+	if (lastError != ERROR_SUCCESS)
+	{
+		TCHAR* errorStrPtr;
+		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, lastError,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&errorStrPtr), 0, nullptr);
+		tstring errorDesc(errorStrPtr);
+		LocalFree(errorStrPtr);
+
+		return WindowsException(lastError, errorDesc);
+	}
+	else
+	{
+		return WindowsException(ERROR_SUCCESS, TEXT(""));
+	}
+}
+
+void handleWinAPIError(LSTATUS retVal)
+{
+	WindowsException error = getWinAPIError(retVal);
+	if(error.code().value() != ERROR_SUCCESS)
+	{
+		throw error;
+	}
+}
+
+tstring readRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName)
+{
+	SetLastError(ERROR_SUCCESS);
+	HKEY URLAssocHandle = nullptr;
+	auto keyType = REG_NONE;
+	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_READ, &URLAssocHandle));
+	DWORD reqBufSize(0);
+	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, nullptr, &reqBufSize));
+	std::basic_string<BYTE> str(reqBufSize, BYTE(0));
+	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, str.data(), &reqBufSize));
+
+	return tstring(reinterpret_cast<const TCHAR*>(str.c_str()));
 }
 
 void startSubprocess(const wxString& commandLine)
@@ -241,7 +257,7 @@ std::filesystem::path getAppExecutablePath()
 		{
 			delete[] filenameBuf;
 			
-			if(ex.errorCode == ERROR_INSUFFICIENT_BUFFER)
+			if(ex.code().value() == ERROR_INSUFFICIENT_BUFFER)
 			{
 				currentBufSize *= 2;
 				filenameBuf = new TCHAR[currentBufSize];
