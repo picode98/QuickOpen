@@ -200,6 +200,7 @@ void sendJSONResponse(mg_connection* conn, int status, const nlohmann::json& jso
 	mg_response_header_send(conn);
 	std::string jsonString = json.dump();
 	mg_write(conn, jsonString.c_str(), jsonString.size());
+	mg_close_connection(conn);
 }
 
 class TestHandler : public CivetHandler
@@ -578,8 +579,11 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 	class IncorrectFileLengthException : std::exception
 	{};
 
+	class OperationCanceledException : std::exception
+	{};
+
 	void MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize,
-		TrayStatusWindow::FileUploadActivityEntry* uploadActivityEntryRef)
+		TrayStatusWindow::FileUploadActivityEntry* uploadActivityEntryRef, std::atomic<bool>& cancelRequestFlag)
 	{
 		static const long long CHUNK_SIZE = 1LL << 20;
 		unsigned long long bytesWritten = 0;
@@ -600,6 +604,15 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 				if(bytesWritten > targetFileSize)
 				{
 					throw IncorrectFileLengthException();
+				}
+				else if(cancelRequestFlag)
+				{
+					wxGetApp().CallAfter([uploadActivityEntryRef]
+					{
+						uploadActivityEntryRef->setCancelCompleted();
+					});
+
+					throw OperationCanceledException();
 				}
 				
 				outFile.write(bodyBuffer.get(), bytesRead);
@@ -696,9 +709,10 @@ public:
 				//}
 
 				// TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = nullptr;
-				auto createActivity = [this, consentedFileInfo]
+				std::atomic<bool> cancelFlag = false;
+				auto createActivity = [this, consentedFileInfo, &cancelFlag]
 				{
-					return this->statusWindow->addFileUploadActivity(consentedFileInfo.consentedFileName);
+					return this->statusWindow->addFileUploadActivity(consentedFileInfo.consentedFileName, cancelFlag);
 				};
 				
 				TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = 
@@ -706,7 +720,7 @@ public:
 				
 				try
 				{
-					MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize, activityEntryRef);
+					MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize, activityEntryRef, cancelFlag);
 					mg_send_http_ok(conn, "text/plain", 0);
 				}
 				catch(const std::system_error& ex)
@@ -722,6 +736,13 @@ public:
 						{"uploadFile", "The file sent did not have the length specified by the consent token used."}
 					} });
 					sendJSONResponse(conn, 400, jsonErrorInfo);
+				}
+				catch(const OperationCanceledException&)
+				{
+					auto jsonErrorInfo = nlohmann::json(FormErrorList{ {
+						{"uploadFile", "The upload was canceled by the receiving user."}
+					} });
+					sendJSONResponse(conn, 500, jsonErrorInfo);
 				}
 			}
 			else

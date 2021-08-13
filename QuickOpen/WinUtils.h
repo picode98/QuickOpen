@@ -25,6 +25,8 @@ std::wstring UTF8StrToWideStr(const std::string& UTF8Str)
 
 std::string WideStrToUTF8Str(const std::wstring& wideStr)
 {
+	if (wideStr.empty()) return "";
+	
 	int reqBufSize = WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), wideStr.size(), nullptr, 0, nullptr, nullptr);
 	std::string str(reqBufSize, '\0');
 	WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), wideStr.size(), str.data(), str.size(), nullptr, nullptr);
@@ -56,18 +58,15 @@ public:
 
 WindowsException getWinAPIError(LSTATUS retVal)
 {
-	DWORD lastError = retVal;
-	if (lastError == ERROR_SUCCESS) lastError = GetLastError();
-
-	if (lastError != ERROR_SUCCESS)
+	if (retVal != ERROR_SUCCESS)
 	{
 		TCHAR* errorStrPtr;
-		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, lastError,
+		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, retVal,
 			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&errorStrPtr), 0, nullptr);
 		tstring errorDesc(errorStrPtr);
 		LocalFree(errorStrPtr);
 
-		return WindowsException(lastError, errorDesc);
+		return WindowsException(retVal, errorDesc);
 	}
 	else
 	{
@@ -75,9 +74,19 @@ WindowsException getWinAPIError(LSTATUS retVal)
 	}
 }
 
-void handleWinAPIError(LSTATUS retVal)
+void handleWinAPIError(LSTATUS retVal, bool checkGLE = true)
 {
-	WindowsException error = getWinAPIError(retVal);
+	WindowsException error(ERROR_SUCCESS, tstring(TEXT("")));
+	auto test = GetLastError();
+	if(retVal != ERROR_SUCCESS)
+	{
+		error = getWinAPIError(retVal);
+	}
+	else if(checkGLE)
+	{
+		error = getWinAPIError(GetLastError());
+	}
+	
 	if(error.code().value() != ERROR_SUCCESS)
 	{
 		throw error;
@@ -246,6 +255,7 @@ std::filesystem::path getAppExecutablePath()
 	{
 		try
 		{
+			SetLastError(ERROR_SUCCESS);
 			GetModuleFileName(nullptr, filenameBuf, currentBufSize);
 			handleWinAPIError(ERROR_SUCCESS);
 			

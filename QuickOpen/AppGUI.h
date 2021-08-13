@@ -28,6 +28,7 @@
 
 #include "AppConfig.h"
 #include "Utils.h"
+#include <atomic>
 
 #ifdef WIN32
 #include "WinUtils.h"
@@ -199,6 +200,8 @@ ResultType wxCallAfterSync(AppType& app, FuncType func)
 	return resultVal.value();
 }
 
+const wxColour ERROR_TEXT_COLOR = wxColour(0x0000a0);
+
 class ProgressBarWithText : public wxBoxSizer
 {
 	wxGauge* progressBar = nullptr;
@@ -214,8 +217,6 @@ class ProgressBarWithText : public wxBoxSizer
 		return wxString::Format("%.1f%%", this->progress);
 	}
 public:
-	static const wxColour ERROR_COLOR;
-	
 	ProgressBarWithText(wxWindow* parent, double progress = 0.0): wxBoxSizer(wxHORIZONTAL), progress(progress), gaugeValue(static_cast<int>(progress * gaugeRange))
 	{
 		this->Add(progressBar = new wxGauge(parent, wxID_ANY, gaugeRange), wxSizerFlags(1).Expand());
@@ -243,11 +244,10 @@ public:
 
 	void setErrorStyle()
 	{
-		this->progressBar->SetForegroundColour(ERROR_COLOR);
-		this->progressText->SetForegroundColour(ERROR_COLOR);
+		// this->progressBar->SetForegroundColour(ERROR_TEXT_COLOR);
+		this->progressText->SetForegroundColour(ERROR_TEXT_COLOR);
 	}
 };
-const wxColour ProgressBarWithText::ERROR_COLOR = wxColour(wxT("red"));
 
 class QuickOpenSettings : public wxFrame
 {
@@ -636,6 +636,8 @@ public:
 		wxBoxSizer* bottomButtonSizer = nullptr;
 		wxButton* openButton = nullptr;
 		wxButton* openFolderButton = nullptr;
+		wxButton* cancelButton = nullptr;
+		std::atomic<bool>& cancelRequestFlag;
 		wxStaticText* errorText = nullptr;
 
 		wxFileName filename;
@@ -700,7 +702,7 @@ public:
 		void OnOpenFolderButtonClicked(wxCommandEvent& event)
 		{
 			wxFileName folderToOpen(this->filename);
-			folderToOpen.SetName(wxT(""));
+			folderToOpen.SetFullName(wxT(""));
 			
 			if(this->uploadCompleted)
 			{
@@ -711,9 +713,17 @@ public:
 				openExplorerFolder(folderToOpen);
 			}
 		}
+
+		void OnCancelButtonClicked(wxCommandEvent& event)
+		{
+			this->cancelButton->Enable(false);
+			this->openButton->Enable(false);
+			this->cancelButton->SetLabel(wxT("Canceling..."));
+			this->cancelRequestFlag = true;
+		}
 	public:
-		FileUploadActivityEntry(wxWindow* parent, const wxString& filename, bool uploadCompleted = false, double uploadProgress = 0.0) : ActivityEntry(parent),
-		parent(parent), filename(filename), uploadCompleted(uploadCompleted), uploadProgress(uploadProgress)
+		FileUploadActivityEntry(wxWindow* parent, const wxString& filename, std::atomic<bool>& cancelRequestFlag, bool uploadCompleted = false, double uploadProgress = 0.0) : ActivityEntry(parent),
+		parent(parent), filename(filename), cancelRequestFlag(cancelRequestFlag), uploadCompleted(uploadCompleted), uploadProgress(uploadProgress)
 		{
 			// vertSizer = new wxBoxSizer(wxVERTICAL);
 			this->Add(entryText = new wxStaticText(parent, wxID_ANY, this->getEntryText()), wxSizerFlags(0).Expand());
@@ -721,15 +731,19 @@ public:
 			this->Add(fileUploadProgress = new ProgressBarWithText(parent), wxSizerFlags(0).Expand());
 			this->AddSpacer(DEFAULT_CONTROL_SPACING);
 			this->Add(bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL));
-
+			
 			bottomButtonSizer->Add(openButton = new wxButton(parent, wxID_ANY, wxT("Open When Done")));
 			bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 			bottomButtonSizer->Add(openFolderButton = new wxButton(parent, wxID_ANY, wxT("Open Folder")));
+			bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+			bottomButtonSizer->Add(cancelButton = new wxButton(parent, wxID_CANCEL));
+			cancelButton->Bind(wxEVT_BUTTON, &FileUploadActivityEntry::OnCancelButtonClicked, this);
 
 			openButton->Bind(wxEVT_BUTTON, &FileUploadActivityEntry::OnOpenButtonClicked, this);
 			openFolderButton->Bind(wxEVT_BUTTON, &FileUploadActivityEntry::OnOpenFolderButtonClicked, this);
 			updateOpenButtonText();
 			this->Add(errorText = new wxStaticText(parent, wxID_ANY, wxT("")));
+			errorText->SetForegroundColour(ERROR_TEXT_COLOR);
 			this->Hide(errorText);
 			
 			// this->SetSizerAndFit(vertSizer);
@@ -751,6 +765,7 @@ public:
 			this->uploadCompleted = completed;
 			this->updateProgressBar();
 			this->updateOpenButtonText();
+			this->cancelButton->Enable(false);
 
 			if(completed && this->openWhenDone)
 			{
@@ -775,7 +790,15 @@ public:
 			{
 				errorText->SetLabel(wxString() << wxT("An error occurred: ") << error->what());
 			}
+
+			openButton->Enable(false);
 			fileUploadProgress->setErrorStyle();
+		}
+
+		void setCancelCompleted()
+		{
+			assert(this->cancelRequestFlag);
+			this->cancelButton->SetLabel(wxT("Cancel"));
 		}
 	};
 	
@@ -884,9 +907,9 @@ public:
 		return newActivity;
 	}
 
-	FileUploadActivityEntry* addFileUploadActivity(const wxFileName& filename)
+	FileUploadActivityEntry* addFileUploadActivity(const wxFileName& filename, std::atomic<bool>& cancelRequestFlag)
 	{
-		auto* newActivity = new FileUploadActivityEntry(this->activityList, filename.GetFullPath());
+		auto* newActivity = new FileUploadActivityEntry(this->activityList, filename.GetFullPath(), cancelRequestFlag);
 		this->activityList->addActivity(newActivity);
 
 		this->Layout();
