@@ -1,12 +1,12 @@
 #pragma once
 
+#include <wx/wxcrt.h>
+#include <wx/string.h>
+
 #include <shared_mutex>
 #include <sstream>
 #include <string>
-#include <wx/string.h>
-#include <wx/wxcrt.h>
 #include <map>
-
 
 #include <civetweb.h>
 
@@ -28,7 +28,7 @@ public:
 
 		T* operator->() const
 		{
-			return owner.obj;
+			return owner.obj.get();
 		}
 
 		~WritableReference()
@@ -49,7 +49,7 @@ public:
 
 		const T* operator->() const
 		{
-			return owner.obj;
+			return owner.obj.get();
 		}
 
 		~ReadableReference()
@@ -58,9 +58,12 @@ public:
 		}
 	};
 
-	T* obj;
+	std::unique_ptr<T> obj;
 
-	WriterReadersLock(T* obj) : obj(obj)
+	WriterReadersLock(std::unique_ptr<T>& obj) : obj(std::move(obj))
+	{}
+
+	WriterReadersLock(std::unique_ptr<T>&& obj) : obj(std::move(obj))
 	{}
 
 	void lockForReading()
@@ -84,10 +87,10 @@ public:
 	}
 };
 
-long strtol(const wxString& str)
+inline long strtol(const wxString& str)
 {
 	long intVal;
-	if(!str.ToLong(&intVal))
+	if (!str.ToLong(&intVal))
 	{
 		throw std::invalid_argument("Could not parse the supplied string as an integer.");
 	}
@@ -95,7 +98,7 @@ long strtol(const wxString& str)
 	return intVal;
 }
 
-wxString getPlaceholderValue(const std::vector<wxString>& args, const std::map<wxString, wxString>& kwArgs, const wxString& placeholderStr, bool KWPlaceholder)
+inline wxString getPlaceholderValue(const std::vector<wxString>& args, const std::map<wxString, wxString>& kwArgs, const wxString& placeholderStr, bool KWPlaceholder)
 {
 	if (KWPlaceholder)
 	{
@@ -107,7 +110,8 @@ wxString getPlaceholderValue(const std::vector<wxString>& args, const std::map<w
 	}
 }
 
-wxString substituteFormatString(const wxString& format, wxUniChar placeholderChar, const std::vector<wxString>& args, const std::map<wxString, wxString>& kwArgs)
+inline wxString substituteFormatString(const wxString& format, wxUniChar placeholderChar, const std::vector<wxString>& args,
+	const std::map<wxString, wxString>& kwArgs)
 {
 	wxString resultStr, currentPlaceholderStr;
 	bool parsingPlaceholder = false, parsingKWPlaceholder = false;
@@ -120,7 +124,7 @@ wxString substituteFormatString(const wxString& format, wxUniChar placeholderCha
 			{
 				currentPlaceholderStr += thisChar;
 			}
-			else if(wxIsalpha(thisChar))
+			else if (wxIsalpha(thisChar))
 			{
 				currentPlaceholderStr += thisChar;
 				parsingKWPlaceholder = true;
@@ -139,7 +143,10 @@ wxString substituteFormatString(const wxString& format, wxUniChar placeholderCha
 			}
 			else
 			{
-				resultStr += currentPlaceholderStr.empty() ? placeholderChar : (getPlaceholderValue(args, kwArgs, currentPlaceholderStr, parsingKWPlaceholder) + thisChar);
+				resultStr += currentPlaceholderStr.empty()
+					? placeholderChar
+					: (getPlaceholderValue(args, kwArgs, currentPlaceholderStr, parsingKWPlaceholder) +
+						thisChar);
 				parsingPlaceholder = parsingKWPlaceholder = false;
 			}
 		}
@@ -155,16 +162,18 @@ wxString substituteFormatString(const wxString& format, wxUniChar placeholderCha
 
 	if (parsingPlaceholder)
 	{
-		resultStr += currentPlaceholderStr.empty() ? placeholderChar : getPlaceholderValue(args, kwArgs, currentPlaceholderStr, parsingKWPlaceholder);
+		resultStr += currentPlaceholderStr.empty()
+			? placeholderChar
+			: getPlaceholderValue(args, kwArgs, currentPlaceholderStr, parsingKWPlaceholder);
 	}
 
 	return resultStr;
 }
 
-std::string MGReadAll(mg_connection* conn)
+inline std::string MGReadAll(mg_connection* conn)
 {
 	std::stringstream strBuilder;
-	
+
 	static const long long CHUNK_SIZE = 1LL << 16;
 	char bodyBuffer[CHUNK_SIZE];
 

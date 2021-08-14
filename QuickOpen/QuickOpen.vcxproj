@@ -91,7 +91,7 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
@@ -131,7 +131,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="AppConfig.cpp" />
+    <ClCompile Include="AppGUI.cpp" />
+    <ClCompile Include="GUIUtils.cpp" />
+    <ClCompile Include="TrayStatusWindow.cpp" />
+    <ClCompile Include="Utils.cpp" />
+    <ClCompile Include="WebServer.cpp" />
+    <ClCompile Include="WinUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json" />
@@ -140,7 +146,10 @@
   <ItemGroup>
     <ClInclude Include="AppConfig.h" />
     <ClInclude Include="AppGUI.h" />
+    <ClInclude Include="GUIUtils.h" />
+    <ClInclude Include="TrayStatusWindow.h" />
     <ClInclude Include="Utils.h" />
+    <ClInclude Include="WebServer.h" />
     <ClInclude Include="WinUtils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
