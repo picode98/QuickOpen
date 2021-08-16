@@ -10,6 +10,24 @@
             border: 1px solid red;
             background-color: pink;
             border-radius: 5px;
+            margin-top: 5px;
+        }
+
+        .page-drop-target {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background-color: rgba(255, 255, 255, 0.7);
+
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+
+            font-size: 48pt;
         }
     </style>
     <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.js"></script>
@@ -58,6 +76,8 @@
             {
                 e.preventDefault();
                 resetFormErrors($('#open-save-file-form'));
+                $('#upload-file-button').prop('disabled', true);
+                $('#file-upload-status-text').text('Prompting the user...');
 
                 // let formData = new FormData($('#open-save-file-form')[0]);
 
@@ -68,20 +88,41 @@
                     contentType: 'application/json'
                 }).done(data =>
                 {
+                    $('#file-upload-status-text').text('Uploading...');
+
                     $.post({
                         url: '/api/openSaveFile?consentToken=' + data.consentToken,
                         data: fileInfo,
                         contentType: 'application/octet-stream',
-                        processData: false
+                        processData: false,
+                        xhr: () =>
+                        {
+                            let newXHR = new XMLHttpRequest();
+                            newXHR.upload.addEventListener('progress', progressEvt =>
+                            {
+                                if (progressEvt.lengthComputable)
+                                {
+                                    let currentProgress = (progressEvt.loaded / progressEvt.total) * 100.0;
+                                    $('#file-upload-status-text').text(`Uploading (${currentProgress.toFixed(1)}% complete)...`);
+                                }
+                            });
+                            return newXHR;
+                        }
                     }).done(() =>
                     {
-                        alert('File uploaded.');
+                        $('#file-upload-status-text').text('File uploaded successfully.');
                     }).fail((jqXHR, textStatus, errorThrown) =>
                     {
+                        $('#file-upload-status-text').text('');
                         displayFormErrors($('#open-save-file-form'), jqXHR.responseJSON);
+                    }).always(() =>
+                    {
+                        $('#upload-file-button').prop('disabled', false);
                     });
                 }).fail((jqXHR, textStatus, errorThrown) =>
                 {
+                    $('#upload-file-button').prop('disabled', false);
+                    $('#file-upload-status-text').text('');
                     displayFormErrors($('#open-save-file-form'), jqXHR.responseJSON);
                 });
             });
@@ -89,6 +130,59 @@
             //$('#url-text-input').on('input', function () {
             //    $('#open-url-button').prop('disabled', $(this).val().length === 0);
             //});
+
+            $(document).on('dragenter', e =>
+            {
+                e.preventDefault();
+                $('.page-drop-target').show();
+            });
+
+            $('.page-drop-target').on('dragenter', e =>
+            {
+                e.preventDefault();
+            }).on('dragover', e =>
+            {
+                e.preventDefault();
+            }).on('dragend', e =>
+            {
+                e.preventDefault();
+                $('.page-drop-target').hide();
+                // alert('Drop event.');
+            }).on('drop', e =>
+            {
+                e.preventDefault();
+                $('.page-drop-target').hide();
+
+                let fileList = e.originalEvent.dataTransfer.files;
+                if (fileList.length > 0)
+                {
+                    $('#uploadFile')[0].files = fileList;
+
+                    if (fileList.length > 1)
+                    {
+                        $('#single-file-warning').show();
+                    }
+                }
+
+                let itemList = e.originalEvent.dataTransfer.items;
+
+                for (thisItem of itemList)
+                {
+                    if (thisItem.kind === 'string' && thisItem.type.startsWith('text/plain'))
+                    {
+                        thisItem.getAsString(data =>
+                        {
+                            $('#url-text-input').val(data);
+                        });
+
+                        break;
+                    }
+                }
+            }).on('dragleave', e =>
+            {
+                e.preventDefault();
+                $('.page-drop-target').hide();
+            });
         });
     </script>
     <TITLE>QuickOpen</TITLE>
@@ -96,6 +190,7 @@
 <BODY>
 <h1>QuickOpen</h1>
 <p>Enter a URL below to open it:</p>
+<div class="page-drop-target" style="display: none;">Drop a URL or file here</div>
 <form id="open-webpage-form">
     <input id="url-text-input" name="url" type="url" placeholder="Enter a URL..." required/>
     <button id="open-url-button" type="submit">Open</button>
@@ -108,7 +203,10 @@
 <p>or select a file below to open it:</p>
 <form id="open-save-file-form">
     <input id="uploadFile" name="uploadFile" type="file" />
-    <button type="submit">Open File</button>
+    <button id="upload-file-button" type="submit">Open File</button>
+    <p id="single-file-warning" style="display: none;">WARNING: Multiple files were selected, however only the first file in the list will be
+        uploaded. Support for uploading multiple files at once will be added in a future release.</p>
+    <span id="file-upload-status-text"></span>
     <div class="form-errors" style="display: none;">
         <p>The following errors were encountered:</p>
         <ul class="form-error-list"></ul>

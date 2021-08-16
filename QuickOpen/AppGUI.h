@@ -303,6 +303,6 @@ public:
 
 inline bool promptForWebpageOpen(std::string URL)
 {
-	auto response = wxMessageBox(wxT("Do you want to open ") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
+	auto response = wxMessageBox(wxT("Do you want to open the following webpage?\n") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
 	return (response == wxYES);
 }

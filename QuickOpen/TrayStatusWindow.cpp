@@ -19,6 +19,19 @@ void TrayStatusWindow::OnWindowActivationChanged(wxActivateEvent& event)
 	event.Skip();
 }
 
+void TrayStatusWindow::fitActivityListWidth()
+{
+	static const int WIDTH_PADDING = 50;
+	wxSize vSize = this->activityList->GetVirtualSize(),
+	       phySize = this->GetSize();
+	int minWidth = vSize.GetX() + FromDIP(WIDTH_PADDING);
+
+	if (phySize.GetX() < minWidth)
+	{
+		this->SetSize(wxSize(minWidth, phySize.GetY()));
+	}
+}
+
 TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
 	wxSize(300, 300),
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
@@ -36,6 +49,7 @@ TrayStatusWindow::WebpageOpenedActivityEntry* TrayStatusWindow::addWebpageOpened
 	this->activityList->addActivity(newActivity);
 	// this->topLevelSizer->Add(new wxStaticText(this, wxID_ANY, wxT("A test label.")), wxSizerFlags(0).Expand());
 	this->Layout();
+	this->fitActivityListWidth();
 	// this->Fit();
 
 	return newActivity;
@@ -48,6 +62,7 @@ TrayStatusWindow::FileUploadActivityEntry* TrayStatusWindow::addFileUploadActivi
 	this->activityList->addActivity(newActivity);
 
 	this->Layout();
+	this->fitActivityListWidth();
 	// this->Fit();
 
 	return newActivity;
@@ -265,8 +280,8 @@ TrayStatusWindow::ActivityList::ActivityList(wxWindow* parent) : wxScrolledWindo
 
 	noItemsElement = new wxBoxSizer(wxVERTICAL);
 	noItemsElement->Add(
-		new wxStaticText(this, wxID_ANY, wxT("No activity items. This is some text to test scrolling.")),
-		wxSizerFlags(1).Expand().Border(wxALL, 10));
+		new wxStaticText(this, wxID_ANY, wxT("No activity items.")),
+		wxSizerFlags(1).CenterHorizontal().Border(wxALL, 10));
 	topLevelSizer->Add(noItemsElement, wxSizerFlags(0).Expand());
 
 	items = new wxBoxSizer(wxVERTICAL);

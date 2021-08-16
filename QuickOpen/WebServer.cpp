@@ -274,6 +274,8 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 	auto consentDlgLambda = [&destPath, &rqFileInfo]
 	{
 		auto consentDlg = FileOpenSaveConsentDialog(destPath, rqFileInfo.fileSize);
+		consentDlg.Show();
+		consentDlg.RequestUserAttention();
 		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
 		rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
 		return resultVal;

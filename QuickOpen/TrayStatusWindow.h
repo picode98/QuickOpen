@@ -108,6 +108,7 @@ private:
 	ActivityList* activityList = nullptr;
 
 	void OnWindowActivationChanged(wxActivateEvent& event);
+	void fitActivityListWidth();
 
 public:
 	TrayStatusWindow();
