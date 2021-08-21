@@ -1,7 +1,7 @@
 #pragma once
 
-#include <wx/wxcrt.h>
 #include <wx/string.h>
+#include <wx/crt.h>
 
 #include <shared_mutex>
 #include <sstream>
@@ -116,8 +116,9 @@ inline wxString substituteFormatString(const wxString& format, wxUniChar placeho
 	wxString resultStr, currentPlaceholderStr;
 	bool parsingPlaceholder = false, parsingKWPlaceholder = false;
 
-	for (wxUniChar thisChar : format)
+	for (size_t i = 0; i < format.size(); ++i)
 	{
+		wxUniChar thisChar = format.GetChar(i); // This is not very efficient (O(n^2)), but there seem to be linking problems with wxString::const_iterator ...
 		if (parsingPlaceholder)
 		{
 			if (wxIsdigit(thisChar))
