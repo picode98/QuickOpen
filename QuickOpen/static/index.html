@@ -52,6 +52,46 @@
                 });
             }
 
+            function uploadFile(fileList, consentTokenList, index)
+            {
+                $.post({
+                    url: '/api/openSaveFile?consentToken=' + consentTokenList[index],
+                    data: fileList[index],
+                    contentType: 'application/octet-stream',
+                    processData: false,
+                    xhr: () =>
+                    {
+                        let newXHR = new XMLHttpRequest();
+                        newXHR.upload.addEventListener('progress',
+                            progressEvt =>
+                            {
+                                if (progressEvt.lengthComputable)
+                                {
+                                    let currentProgress = (progressEvt.loaded / progressEvt.total) * 100.0;
+                                    $('#file-upload-status-text').text(`Uploading file "${fileList[index].filename}" (File ${index + 1} of ${fileList.length}, ${currentProgress.toFixed(1)}% complete)...`);
+                                }
+                            });
+                        return newXHR;
+                    }
+                }).done(() =>
+                {
+                    $('#file-upload-status-text').text('File uploaded successfully.');
+                }).fail((jqXHR, textStatus, errorThrown) =>
+                {
+                    $('#file-upload-status-text').text('');
+                    displayFormErrors($('#open-save-file-form'), jqXHR.responseJSON);
+                }).always(() =>
+                {
+                    if (index >= (fileList.length - 1))
+                    {
+                        $('#upload-file-button').prop('disabled', false);
+                    }
+                    else
+                    {
+                        uploadFile(fileList, consentTokenList, index + 1);
+                    }
+                });
+            }
 
             $('#open-webpage-form').submit(e =>
             {
@@ -80,45 +120,16 @@
                 $('#file-upload-status-text').text('Prompting the user...');
 
                 // let formData = new FormData($('#open-save-file-form')[0]);
-
-                let fileInfo = $('#uploadFile')[0].files[0];
+                let files = Array.from($('#uploadFile')[0].files);
                 $.post({
                     url: '/api/openSaveFile/getConsent',
-                    data: JSON.stringify({ "filename": fileInfo.name, "fileSize": fileInfo.size }),
+                    data: JSON.stringify({ fileList: files.map(thisFile => { return { "filename": thisFile.name, "fileSize": thisFile.size } }) }),
                     contentType: 'application/json'
                 }).done(data =>
                 {
-                    $('#file-upload-status-text').text('Uploading...');
+                    $('#file-upload-status-text').text('Starting upload...');
+                    uploadFile(files, data.consentTokens, 0);
 
-                    $.post({
-                        url: '/api/openSaveFile?consentToken=' + data.consentToken,
-                        data: fileInfo,
-                        contentType: 'application/octet-stream',
-                        processData: false,
-                        xhr: () =>
-                        {
-                            let newXHR = new XMLHttpRequest();
-                            newXHR.upload.addEventListener('progress', progressEvt =>
-                            {
-                                if (progressEvt.lengthComputable)
-                                {
-                                    let currentProgress = (progressEvt.loaded / progressEvt.total) * 100.0;
-                                    $('#file-upload-status-text').text(`Uploading (${currentProgress.toFixed(1)}% complete)...`);
-                                }
-                            });
-                            return newXHR;
-                        }
-                    }).done(() =>
-                    {
-                        $('#file-upload-status-text').text('File uploaded successfully.');
-                    }).fail((jqXHR, textStatus, errorThrown) =>
-                    {
-                        $('#file-upload-status-text').text('');
-                        displayFormErrors($('#open-save-file-form'), jqXHR.responseJSON);
-                    }).always(() =>
-                    {
-                        $('#upload-file-button').prop('disabled', false);
-                    });
                 }).fail((jqXHR, textStatus, errorThrown) =>
                 {
                     $('#upload-file-button').prop('disabled', false);
@@ -157,11 +168,6 @@
                 if (fileList.length > 0)
                 {
                     $('#uploadFile')[0].files = fileList;
-
-                    if (fileList.length > 1)
-                    {
-                        $('#single-file-warning').show();
-                    }
                 }
 
                 let itemList = e.originalEvent.dataTransfer.items;
@@ -202,10 +208,10 @@
 </form>
 <p>or select a file below to open it:</p>
 <form id="open-save-file-form">
-    <input id="uploadFile" name="uploadFile" type="file" />
+    <input id="uploadFile" name="uploadFile" type="file" multiple />
     <button id="upload-file-button" type="submit">Open File</button>
-    <p id="single-file-warning" style="display: none;">WARNING: Multiple files were selected, however only the first file in the list will be
-        uploaded. Support for uploading multiple files at once will be added in a future release.</p>
+    <!--<p id="single-file-warning" style="display: none;">WARNING: Multiple files were selected, however only the first file in the list will be
+        uploaded. Support for uploading multiple files at once will be added in a future release.</p>-->
     <span id="file-upload-status-text"></span>
     <div class="form-errors" style="display: none;">
         <p>The following errors were encountered:</p>

@@ -10,6 +10,26 @@
 
 #include <civetweb.h>
 
+#include <nlohmann/json.hpp>
+
+namespace nlohmann
+{
+	template<>
+	struct adl_serializer<wxString>
+	{
+		static void to_json(json& j, const wxString& opt)
+		{
+			j = opt.ToUTF8();
+		}
+
+		static void from_json(const json& j, wxString& opt)
+		{
+			assert(j.is_string());
+			opt.assign(wxString::FromUTF8(j.get<std::string>()));
+		}
+	};
+}
+
 template<typename T>
 class WriterReadersLock
 {

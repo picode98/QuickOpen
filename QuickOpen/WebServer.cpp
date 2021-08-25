@@ -257,27 +257,38 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* conn)
 {
 	std::string bodyStr = MGReadAll(conn);
-	auto rqFileInfo = RequestedFileInfo::fromJSON(nlohmann::json::parse(bodyStr));
+	auto rqFileInfo = FileConsentRequestInfo(nlohmann::json::parse(bodyStr));
 
-	wxFileName destPath;
+	wxFileName defaultDestDir;
 	{
 		WriterReadersLock<AppConfig>::ReadableReference configRef(*configLock);
-		destPath = wxFileName(configRef->fileSavePath);
-		destPath.SetFullName(rqFileInfo.filename);
+		defaultDestDir = wxFileName(configRef->fileSavePath);
 	}
+
+	//for (auto& thisFile : rqFileInfo.fileList)
+	//{
+	//	thisFile.suggestedFileName = defaultDestDir;
+	//	thisFile.suggestedFileName.SetFullName(thisFile.filename);
+	//}
 
 	//std::optional<FileOpenSaveConsentDialog::ResultCode> resultCode;
 	//std::condition_variable dialogResult;
 	//std::mutex dialogResultMutex;
 	//std::unique_lock<std::mutex> dialogResultLock(dialogResultMutex);
 
-	auto consentDlgLambda = [&destPath, &rqFileInfo]
+	auto consentDlgLambda = [&defaultDestDir, &rqFileInfo]
 	{
-		auto consentDlg = FileOpenSaveConsentDialog(destPath, rqFileInfo.fileSize);
+		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo);
 		consentDlg.Show();
 		consentDlg.RequestUserAttention();
 		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
-		rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
+		std::vector<wxFileName> consentedFileNames = consentDlg.getConsentedFilenames();
+
+		for(size_t i = 0; i < consentedFileNames.size(); ++i)
+		{
+			rqFileInfo.fileList[i].consentedFileName = consentedFileNames[i];
+		}
+
 		return resultVal;
 	};
 
@@ -301,17 +312,20 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	if (result == FileOpenSaveConsentDialog::ACCEPT)
 	{
-		// rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
-		ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
-
+		std::vector<ConsentToken> newTokens;
+		for (const auto& thisFile : rqFileInfo.fileList)
 		{
-			WriterReadersLock<TokenMap>::WritableReference writeRef(tokenWRRef);
-			writeRef->insert({newToken, rqFileInfo});
+			// rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
+			ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
+			newTokens.push_back(newToken);
+
+			{
+				WriterReadersLock<TokenMap>::WritableReference writeRef(tokenWRRef);
+				writeRef->insert({ newToken, thisFile } );
+			}
 		}
 
-		std::string jsonResponse = nlohmann::json{{"consentToken", newToken}}.dump();
-		mg_send_http_ok(conn, "application/json", jsonResponse.size());
-		mg_write(conn, jsonResponse.c_str(), jsonResponse.size());
+		sendJSONResponse(conn, 200, nlohmann::json{ {"consentTokens", newTokens} });
 	}
 	else
 	{
@@ -413,7 +427,7 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 	if (queryStringMap.count("consentToken") > 0)
 	{
 		ConsentToken parsedToken = atoll(queryStringMap["consentToken"].c_str());
-		RequestedFileInfo consentedFileInfo;
+		FileConsentRequestInfo::RequestedFileInfo consentedFileInfo;
 		bool fileFound = false;
 
 		{

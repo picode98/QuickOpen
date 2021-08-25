@@ -27,14 +27,14 @@ void AppConfig::saveConfig(const std::filesystem::path& filePath)
 		{"runAtStartup", runAtStartup},
 		{
 			"webpageOpen", {
-				{"browserID", browserID.ToUTF8()},
-				{"customBrowserPath", customBrowserPath.ToUTF8()}
+				{"browserID", browserID},
+				{"customBrowserPath", customBrowserPath}
 			}
 		},
 		{
 			"openSaveFile", {
 				{"alwaysPromptSave", alwaysPromptSave},
-				{"savePath", fileSavePath.GetPath().ToUTF8()}
+				{"savePath", fileSavePath.GetPath()}
 			}
 		}
 	};

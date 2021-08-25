@@ -5,6 +5,7 @@
 #endif
 
 #include <nlohmann/json.hpp>
+#include "Utils.h"
 // #include <boost/serialization/arc>
 
 #include <fstream>
@@ -31,7 +32,7 @@ struct AppConfig
 	{
 		try
 		{
-			destination = config.at(key);
+			destination = config.at(key).get<T>();
 			return true;
 		}
 		catch (const nlohmann::json::out_of_range&)
@@ -41,17 +42,17 @@ struct AppConfig
 		}
 	}
 
-	template<>
-	static bool getSettingWarn<wxString>(const nlohmann::json& config, const std::string& key, wxString& destination)
-	{
-		std::string strVal;
-		bool successVal = getSettingWarn(config, key, strVal);
-		if(successVal)
-		{
-			destination = wxString::FromUTF8(strVal);
-		}
-		return successVal;
-	}
+	//template<>
+	//static bool getSettingWarn<wxString>(const nlohmann::json& config, const std::string& key, wxString& destination)
+	//{
+	//	std::string strVal;
+	//	bool successVal = getSettingWarn(config, key, strVal);
+	//	if(successVal)
+	//	{
+	//		destination = wxString::FromUTF8(strVal);
+	//	}
+	//	return successVal;
+	//}
 
 	static bool getSettingWarn(const nlohmann::json& config, const std::string& key, wxFileName& destination,
 	                           bool isDir);
