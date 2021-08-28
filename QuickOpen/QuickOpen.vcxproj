@@ -141,6 +141,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json" />
+    <None Include="static\file_picker.js" />
     <None Include="static\index.html" />
   </ItemGroup>
   <ItemGroup>

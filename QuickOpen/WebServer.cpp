@@ -259,6 +259,14 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 	std::string bodyStr = MGReadAll(conn);
 	auto rqFileInfo = FileConsentRequestInfo(nlohmann::json::parse(bodyStr));
 
+	if(rqFileInfo.fileList.empty())
+	{
+		sendJSONResponse(conn, 400, FormErrorList {{
+				{"fileList", "At least one file must be specified."}
+		} });
+		return true;
+	}
+
 	wxFileName defaultDestDir;
 	{
 		WriterReadersLock<AppConfig>::ReadableReference configRef(*configLock);

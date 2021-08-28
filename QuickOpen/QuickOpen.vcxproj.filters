@@ -21,6 +21,9 @@
     <None Include="static\index.html">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="static\file_picker.js">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="WinUtils.h">
@@ -41,13 +44,13 @@
     <ClInclude Include="GUIUtils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="WebServer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AppGUI.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="WebServer.h">
-      <Filter>Header Files</Filter>
     </ClCompile>
     <ClCompile Include="WebServer.cpp">
       <Filter>Source Files</Filter>

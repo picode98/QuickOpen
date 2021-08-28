@@ -110,6 +110,10 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 {
 	WriterReadersLock<AppConfig>::ReadableReference config(configRef);
 
+	wxPanel* topLevelPanel = new wxPanel(this);
+	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
+	panelSizer->Add(topLevelPanel, wxSizerFlags(1).Expand());
+
 	wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* topLevelSizer = new wxBoxSizer(wxVERTICAL);
 	windowPaddingSizer->Add(topLevelSizer, wxSizerFlags(1).Expand().Border(wxALL, DEFAULT_CONTROL_SPACING));
@@ -122,7 +126,7 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	// panelSizer->Add(systemGroup, wxSizerFlags(1).Expand());
 	// panel->SetSizerAndFit(panelSizer);
 
-	this->systemGroup = new wxStaticBox(this, wxID_ANY, wxT("System"));
+	this->systemGroup = new wxStaticBox(topLevelPanel, wxID_ANY, wxT("System"));
 	//(new wxBoxSizer(wxVERTICAL))->Add(systemGroup);
 	// (new wxBoxSizer(wxVERTICAL))->Add(panel);
 	// test->Add(systemGroup);
@@ -132,11 +136,11 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
-	this->runAtStartupCheckbox = new wxCheckBox(this, wxID_ANY, wxT("Run QuickOpen at startup"));
+	this->runAtStartupCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Run QuickOpen at startup"));
 	this->runAtStartupCheckbox->SetValue(config->runAtStartup);
 	this->systemGroupSizer->Add(runAtStartupCheckbox);
 
-	this->webpageOpenGroup = new wxStaticBox(this, wxID_ANY, wxT("Opening Webpages"));
+	this->webpageOpenGroup = new wxStaticBox(topLevelPanel, wxID_ANY, wxT("Opening Webpages"));
 	this->webpageOpenGroupSizer = new wxStaticBoxSizer(this->webpageOpenGroup, wxVERTICAL);
 	topLevelSizer->Add(webpageOpenGroupSizer, wxSizerFlags(0).Expand());
 
@@ -155,7 +159,7 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	browserSelCustomBrowserIndex = browserChoices.size();
 	browserChoices.Add(wxT("Custom command..."));
 
-	this->browserSelection = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, browserChoices);
+	this->browserSelection = new wxChoice(topLevelPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, browserChoices);
 	this->browserSelection->Bind(wxEVT_CHOICE, &QuickOpenSettings::OnBrowserSelectionChanged, this);
 
 	if (config->browserID.empty())
@@ -194,13 +198,13 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 		}
 	}
 
-	webpageOpenGroupSizer->Add(makeLabeledSizer(browserSelection, wxT("Web browser for opening webpages:"), this));
+	webpageOpenGroupSizer->Add(makeLabeledSizer(browserSelection, wxT("Web browser for opening webpages:"), topLevelPanel));
 	// panelSizer->Add(runAtStartupCheckbox, wxSizerFlags(1).Expand());
 	//topLevelSizer->Add(runAtStartupCheckbox, 1);
 
-	this->customBrowserCommandText = new wxTextCtrl(this, wxID_ANY);
+	this->customBrowserCommandText = new wxTextCtrl(topLevelPanel, wxID_ANY);
 	customBrowserCommandText->SetValue(config->customBrowserPath);
-	this->customBrowserFileBrowseButton = new wxButton(this, wxID_ANY, wxT("Browse..."));
+	this->customBrowserFileBrowseButton = new wxButton(topLevelPanel, wxID_ANY, wxT("Browse..."));
 	customBrowserFileBrowseButton->Bind(wxEVT_BUTTON, &QuickOpenSettings::OnCustomBrowserBrowseButtonClicked, this);
 	this->customBrowserSizer = new wxBoxSizer(wxHORIZONTAL);
 	customBrowserSizer->Add(customBrowserCommandText, wxSizerFlags(1).Expand());
@@ -210,22 +214,22 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
-	this->fileOpenSaveGroup = new wxStaticBox(this, wxID_ANY, wxT("Opening/Saving Files"));
+	this->fileOpenSaveGroup = new wxStaticBox(topLevelPanel, wxID_ANY, wxT("Opening/Saving Files"));
 	this->fileOpenSaveGroupSizer = new wxStaticBoxSizer(fileOpenSaveGroup, wxVERTICAL);
 	topLevelSizer->Add(fileOpenSaveGroupSizer, wxSizerFlags(0).Expand());
 
 	fileOpenSaveGroupSizer->Add(
-		makeLabeledSizer(new wxSpinCtrl(this, wxID_ANY, (wxString() << config->maxSaveFileSize), wxDefaultPosition,
+		makeLabeledSizer(new wxSpinCtrl(topLevelPanel, wxID_ANY, (wxString() << config->maxSaveFileSize), wxDefaultPosition,
 		                                wxDefaultSize, wxSP_ARROW_KEYS, 0, 1024),
-		                 wxT("Maximum size for uploaded files:"), this),
+		                 wxT("Maximum size for uploaded files:"), topLevelPanel),
 		wxSizerFlags(0).Expand());
 
 	fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
 	fileOpenSaveGroupSizer->Add(
 		makeLabeledSizer(
-			saveFolderPicker = new wxDirPickerCtrl(this, wxID_ANY, wxEmptyString, wxT("Select Download Folder")),
-			wxT("Folder for downloads:"), this),
+			saveFolderPicker = new wxDirPickerCtrl(topLevelPanel, wxID_ANY, wxEmptyString, wxT("Select Download Folder")),
+			wxT("Folder for downloads:"), topLevelPanel),
 		wxSizerFlags(0).Expand());
 	// saveFolderPicker->SetDirName(config->fileSavePath);
 	saveFolderPicker->SetValidator(FilePathValidator(config->fileSavePath, true));
@@ -233,14 +237,14 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
 	fileOpenSaveGroupSizer->Add(
-		savePromptEachFileCheckbox = new wxCheckBox(this, wxID_ANY, wxT("Prompt for a save location for each file")));
+		savePromptEachFileCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Prompt for a save location for each file")));
 	savePromptEachFileCheckbox->Bind(wxEVT_CHECKBOX, &QuickOpenSettings::OnSavePromptCheckboxChecked, this);
 	savePromptEachFileCheckbox->SetValue(config->alwaysPromptSave);
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
-	this->saveButton = new wxButton(this, wxID_OK);
-	this->cancelButton = new wxButton(this, wxID_CANCEL);
+	this->saveButton = new wxButton(topLevelPanel, wxID_OK);
+	this->cancelButton = new wxButton(topLevelPanel, wxID_CANCEL);
 	this->saveButton->Bind(wxEVT_BUTTON, &QuickOpenSettings::OnSaveButton, this);
 	this->cancelButton->Bind(wxEVT_BUTTON, &QuickOpenSettings::OnCancelButton, this);
 	auto bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -253,7 +257,8 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
 
 	this->TransferDataToWindow();
-	this->SetSizerAndFit(windowPaddingSizer);
+	topLevelPanel->SetSizerAndFit(windowPaddingSizer);
+	this->SetSizerAndFit(panelSizer);
 	this->updateCustomBrowserHidden();
 	this->updateSaveFolderEnabledState();
 	//this->runAtStartupCheckbox->SetSize(300, 50);
@@ -345,7 +350,7 @@ void QuickOpenSettings::updateSaveFolderEnabledState()
 }
 
 FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo):
-	wxDialog(nullptr, wxID_ANY, wxT("Receiving File"), wxDefaultPosition, wxDefaultSize), requestInfo(requestInfo)
+	wxDialog(nullptr, wxID_ANY, wxT("Receiving File"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), requestInfo(requestInfo)
 {
 	wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* topLevelSizer = new wxBoxSizer(wxVERTICAL);
@@ -353,18 +358,25 @@ FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDe
 
 	topLevelSizer->Add(new wxStaticText(this, wxID_ANY,
 	                                    wxString() << wxT("A user is sending the following ")
-														<< (requestInfo.fileList.size() > 1 ? wxT("files:") : wxT("file:"))/* << defaultDestination.
+	                                    << (requestInfo.fileList.size() > 1 ? (wxString() << requestInfo.fileList.size() << wxT(" files:")) : wxT("file:"))/* << defaultDestination.
 	                                    GetFullName() << wxT("\" (") << wxFileName::GetHumanReadableSize(fileSize) <<
 	                                    wxT(").\n")
 	                                    << wxT("Would you like to accept it?")*/
 	));
+	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
+	auto itemListPanel = new wxScrolled<wxPanel>(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(400, 200)));
+	auto itemListSizer = new wxBoxSizer(wxVERTICAL);
+	topLevelSizer->Add(itemListPanel, wxSizerFlags(1).Expand());
 	for(const auto& thisFile : requestInfo.fileList)
 	{
-		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-		topLevelSizer->Add(new wxStaticText(this, wxID_ANY, wxString(wxT('\"')) << thisFile.filename << wxT("\" (")
+		itemListSizer->Add(new wxStaticText(itemListPanel, wxID_ANY, wxString(wxT('\"')) << thisFile.filename << wxT("\" (")
 			<< wxFileName::GetHumanReadableSize(thisFile.fileSize) << wxT(")")));
+		itemListSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 	}
+	itemListPanel->SetSizer(itemListSizer);
+	itemListPanel->FitInside();
+	itemListPanel->SetScrollRate(5, 5);
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
@@ -397,7 +409,6 @@ FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDe
 	}
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-	topLevelSizer->AddStretchSpacer(1);
 
 	auto* bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL);
 
