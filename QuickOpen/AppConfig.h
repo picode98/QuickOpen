@@ -22,7 +22,7 @@ struct AppConfig
 	wxString browserID;
 	wxString customBrowserPath;
 
-	bool alwaysPromptSave = true;
+	bool saveUseLastFolder = true;
 	wxFileName fileSavePath;
 
 	long maxSaveFileSize = 1 << 20;

@@ -126,7 +126,7 @@ class QuickOpenSettings : public wxFrame
 	wxStaticBox* fileOpenSaveGroup;
 	wxStaticBoxSizer* fileOpenSaveGroupSizer;
 	wxDirPickerCtrl* saveFolderPicker;
-	wxCheckBox* savePromptEachFileCheckbox;
+	wxCheckBox* saveUseLastFolderCheckbox;
 	
 	wxButton* cancelButton;
 	wxButton* saveButton;
@@ -146,13 +146,15 @@ public:
 
 	void OnCustomBrowserBrowseButtonClicked(wxCommandEvent& event);
 
-	void OnSavePromptCheckboxChecked(wxCommandEvent& event);
+	void OnSaveUseLastFolderCheckboxChecked(wxCommandEvent& event);
 
 	void updateSaveFolderEnabledState();
 };
 
 class FileOpenSaveConsentDialog : public wxDialog
 {
+	std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
+
 	wxButton* acceptButton = nullptr;
 	wxButton* rejectButton = nullptr;
 	wxFilePickerCtrl* destFilenameInput = nullptr;
@@ -168,7 +170,8 @@ public:
 		DECLINE
 	};
 
-	FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo);
+	FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo,
+		std::shared_ptr<WriterReadersLock<AppConfig>> configRef);
 
 	void OnAcceptClicked(wxCommandEvent& event);
 

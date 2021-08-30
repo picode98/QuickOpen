@@ -165,7 +165,7 @@ struct FileConsentRequestInfo
 
 class FileConsentTokenService : public CivetHandler
 {
-	static const size_t MAX_REQUEST_BODY_SIZE = 1 << 16;
+	// static const size_t MAX_REQUEST_BODY_SIZE = 1 << 16;
 
 public:
 	typedef std::map<ConsentToken, FileConsentRequestInfo::RequestedFileInfo> TokenMap;

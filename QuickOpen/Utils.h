@@ -30,6 +30,13 @@ namespace nlohmann
 	};
 }
 
+inline wxFileName getDirName(const wxFileName& fileName)
+{
+	wxFileName newFileName(fileName);
+	newFileName.SetFullName(wxEmptyString);
+	return newFileName;
+}
+
 template<typename T>
 class WriterReadersLock
 {

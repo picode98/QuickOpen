@@ -270,7 +270,7 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 	wxFileName defaultDestDir;
 	{
 		WriterReadersLock<AppConfig>::ReadableReference configRef(*configLock);
-		defaultDestDir = wxFileName(configRef->fileSavePath);
+		defaultDestDir = configRef->fileSavePath;
 	}
 
 	//for (auto& thisFile : rqFileInfo.fileList)
@@ -284,9 +284,9 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 	//std::mutex dialogResultMutex;
 	//std::unique_lock<std::mutex> dialogResultLock(dialogResultMutex);
 
-	auto consentDlgLambda = [&defaultDestDir, &rqFileInfo]
+	auto consentDlgLambda = [this, &defaultDestDir, &rqFileInfo]
 	{
-		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo);
+		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo, this->configLock);
 		consentDlg.Show();
 		consentDlg.RequestUserAttention();
 		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());

@@ -237,9 +237,9 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
 	fileOpenSaveGroupSizer->Add(
-		savePromptEachFileCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Prompt for a save location for each file")));
-	savePromptEachFileCheckbox->Bind(wxEVT_CHECKBOX, &QuickOpenSettings::OnSavePromptCheckboxChecked, this);
-	savePromptEachFileCheckbox->SetValue(config->alwaysPromptSave);
+		saveUseLastFolderCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Use the last folder selected")));
+	saveUseLastFolderCheckbox->Bind(wxEVT_CHECKBOX, &QuickOpenSettings::OnSaveUseLastFolderCheckboxChecked, this);
+	saveUseLastFolderCheckbox->SetValue(config->saveUseLastFolder);
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
@@ -289,7 +289,7 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 			                            : ""; // TODO
 
 		config->fileSavePath = dynamic_cast<FilePathValidator*>(this->saveFolderPicker->GetValidator())->fileName;
-		config->alwaysPromptSave = this->savePromptEachFileCheckbox->IsChecked();
+		config->saveUseLastFolder = this->saveUseLastFolderCheckbox->IsChecked();
 
 		config->saveConfig();
 
@@ -332,14 +332,14 @@ void QuickOpenSettings::OnCustomBrowserBrowseButtonClicked(wxCommandEvent& event
 	}
 }
 
-void QuickOpenSettings::OnSavePromptCheckboxChecked(wxCommandEvent& event)
+void QuickOpenSettings::OnSaveUseLastFolderCheckboxChecked(wxCommandEvent& event)
 {
 	updateSaveFolderEnabledState();
 }
 
 void QuickOpenSettings::updateSaveFolderEnabledState()
 {
-	if (savePromptEachFileCheckbox->GetValue())
+	if (saveUseLastFolderCheckbox->GetValue())
 	{
 		saveFolderPicker->Disable();
 	}
@@ -349,8 +349,9 @@ void QuickOpenSettings::updateSaveFolderEnabledState()
 	}
 }
 
-FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo):
-	wxDialog(nullptr, wxID_ANY, wxT("Receiving File"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), requestInfo(requestInfo)
+FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo, std::shared_ptr<WriterReadersLock<AppConfig>> configRef):
+	wxDialog(nullptr, wxID_ANY, wxT("Receiving File"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), requestInfo(requestInfo),
+	configRef(configRef)
 {
 	wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* topLevelSizer = new wxBoxSizer(wxVERTICAL);
@@ -430,6 +431,22 @@ void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 {
 	if (this->Validate() && this->TransferDataFromWindow())
 	{
+		bool useLastPath = false;
+		{
+			WriterReadersLock<AppConfig>::ReadableReference config(*configRef);
+			useLastPath = config->saveUseLastFolder;
+		}
+
+		if(useLastPath)
+		{
+			wxFileName newLastPath = (this->multiFileLayout ? getValidator<FilePathValidator>(destFolderNameInput).fileName
+															: getDirName(getValidator<FilePathValidator>(destFilenameInput).fileName));
+
+			WriterReadersLock<AppConfig>::WritableReference config(*configRef);
+			config->fileSavePath = newLastPath;
+			config->saveConfig();
+		}
+
 		this->EndModal(ACCEPT);
 	}
 	else

@@ -33,7 +33,7 @@ void AppConfig::saveConfig(const std::filesystem::path& filePath)
 		},
 		{
 			"openSaveFile", {
-				{"alwaysPromptSave", alwaysPromptSave},
+				{"saveUseLastFolder", saveUseLastFolder},
 				{"savePath", fileSavePath.GetPath()}
 			}
 		}
@@ -73,7 +73,7 @@ AppConfig AppConfig::loadConfig(const std::filesystem::path& filePath)
 	nlohmann::json openSaveFileSettings;
 	if (getSettingWarn(jsonConfig, "openSaveFile", openSaveFileSettings))
 	{
-		getSettingWarn(openSaveFileSettings, "alwaysPromptSave", newConfig.alwaysPromptSave);
+		getSettingWarn(openSaveFileSettings, "saveUseLastFolder", newConfig.saveUseLastFolder);
 		getSettingWarn(openSaveFileSettings, "savePath", newConfig.fileSavePath, true);
 	}
 
