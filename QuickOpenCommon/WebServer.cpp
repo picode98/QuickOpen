@@ -1,3 +1,5 @@
+#include <regex>
+
 #include "WebServer.h"
 
 #include "AppGUI.h"
@@ -179,7 +181,7 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 		if (std::regex_match(url, std::regex("^https?:(\\/\\/)?[a-z|\\d|-|\\.]+($|\\/\\S*$)",
 			std::regex_constants::icase | std::regex_constants::ECMAScript)))
 		{
-			if (promptForWebpageOpen(url))
+			if (promptForWebpageOpen(wxAppRef, url))
 			{
 				wxString wxURL = wxString::FromUTF8(postParams["url"]);
 
@@ -338,7 +340,11 @@ void OpenSaveFileAPIEndpoint::MGStoreBodyChecked(mg_connection* conn, const wxFi
 
 	try
 	{
+#ifdef WIN32
 		outFile.open(fileName.GetFullPath().ToStdWstring(), std::ofstream::binary);
+#else
+        outFile.open(fileName.GetFullPath(), std::ofstream::binary);
+#endif
 
 		int bytesRead;
 		while ((bytesRead = mg_read(conn, bodyBuffer.get(), CHUNK_SIZE)) > 0)
@@ -376,6 +382,8 @@ void OpenSaveFileAPIEndpoint::MGStoreBodyChecked(mg_connection* conn, const wxFi
 	{
 #ifdef WIN32
 		WindowsException detailedError = getWinAPIError(ERROR_SUCCESS);
+#else
+        const auto& detailedError = ex;
 #endif
 		progressReportingApp.CallAfter([uploadActivityEntryRef, detailedError]
 		{

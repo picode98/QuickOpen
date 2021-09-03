@@ -354,7 +354,7 @@ FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDe
 
 	topLevelSizer->Add(new wxStaticText(this, wxID_ANY,
 	                                    wxString() << wxT("A user is sending the file \"") << defaultDestination.
-	                                    GetFullName() << wxT("\" (") << wxFileName::GetHumanReadableSize(fileSize) <<
+	                                    GetFullName() << wxT("\" (") << wxFileName::GetHumanReadableSize(wxULongLong(fileSize)) <<
 	                                    wxT(").\n")
 	                                    << wxT("Would you like to accept it?")
 	));

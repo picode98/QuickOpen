@@ -30,12 +30,10 @@
 #include <iostream>
 #include <optional>
 
-#ifdef _WIN32
-#include "WinUtils.h"
-#endif
+#include "PlatformUtils.h"
 
 const std::filesystem::path STATIC_PATH = std::filesystem::current_path() / "static";
-const int PORT = 80;
+const int PORT = 8080;
 
 typedef uint32_t ConsentToken;
 

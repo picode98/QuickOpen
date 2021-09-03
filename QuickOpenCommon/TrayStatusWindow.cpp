@@ -3,7 +3,7 @@
 #include <wx/clipbrd.h>
 
 #include "GUIUtils.h"
-#include "WinUtils.h"
+#include "PlatformUtils.h"
 
 TrayStatusWindow::ActivityEntry::ActivityEntry(wxWindow* parent) : wxBoxSizer(wxVERTICAL)
 {

@@ -3,6 +3,7 @@
 #include <wx/string.h>
 #include <wx/crt.h>
 
+#include <memory>
 #include <shared_mutex>
 #include <sstream>
 #include <string>

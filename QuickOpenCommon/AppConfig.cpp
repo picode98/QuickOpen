@@ -1,8 +1,25 @@
 #include "AppConfig.h"
 
+using namespace SettingRetrieval;
+
 const std::filesystem::path AppConfig::DEFAULT_CONFIG_PATH = getAppExecutablePath().replace_filename("config.json");
 
-bool AppConfig::getSettingWarn(const nlohmann::json& config, const std::string& key, wxFileName& destination,
+namespace SettingRetrieval
+{
+    template<>
+    bool getSettingWarn<wxString>(const nlohmann::json& config, const std::string& key, wxString& destination)
+    {
+        std::string strVal;
+        bool successVal = getSettingWarn(config, key, strVal);
+        if(successVal)
+        {
+            destination = wxString::FromUTF8(strVal);
+        }
+        return successVal;
+    }
+}
+
+bool getSettingWarn(const nlohmann::json& config, const std::string& key, wxFileName& destination,
                                bool isDir)
 {
 	wxString strVal;

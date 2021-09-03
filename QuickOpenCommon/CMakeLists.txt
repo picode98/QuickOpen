@@ -7,13 +7,14 @@ project ("QuickOpenCommon")
 
 # Add source to this project's executable.
 # add_executable (QuickOpenCommon "QuickOpenCommon.cpp" "QuickOpenCommon.h")
-add_executable(QuickOpenCommon WIN32 "AppConfig.cpp" "AppGui.cpp" "GUIUtils.cpp" "TrayStatusWindow.cpp" "Utils.cpp" "WebServer.cpp" "WinUtils.cpp")
+add_executable(QuickOpenCommon WIN32 "AppConfig.cpp" "AppGUI.cpp" "GUIUtils.cpp" "TrayStatusWindow.cpp" "Utils.cpp" "WebServer.cpp" "PlatformUtils.cpp")
 
 ## find_package(wxWidgets REQUIRED)
 #target_include_directories(QuickOpenCommon PRIVATE C:\\Users\\saama\\Application\\vcpkg\\installed\\x64-windows\\include\\wx)
 ## target_link_libraries(QuickOpenCommon PRIVATE ${wxWidgets_LIBRARIES})
 
-find_package(wxWidgets REQUIRED)
+find_package(wxWidgets REQUIRED core base)
+include(${wxWidgets_USE_FILE})
 target_include_directories(QuickOpenCommon PRIVATE ${wxWidgets_INCLUDE_DIRS})
 target_link_libraries(QuickOpenCommon PRIVATE ${wxWidgets_LIBRARIES})
 
