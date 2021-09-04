@@ -3,7 +3,7 @@
 #include <wx/clipbrd.h>
 
 #include "GUIUtils.h"
-#include "WinUtils.h"
+#include "PlatformUtils.h"
 
 TrayStatusWindow::ActivityEntry::ActivityEntry(wxWindow* parent) : wxBoxSizer(wxVERTICAL)
 {
@@ -38,9 +38,8 @@ TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen
 		wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxCLOSE_BOX))
 {
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	topLevelSizer->Add(activityList = new ActivityList(this), wxSizerFlags(1).Expand());
-
 	this->SetSizer(topLevelSizer);
+	topLevelSizer->Add(activityList = new ActivityList(this), wxSizerFlags(1).Expand());
 }
 
 TrayStatusWindow::WebpageOpenedActivityEntry* TrayStatusWindow::addWebpageOpenedActivity(const wxString& url)

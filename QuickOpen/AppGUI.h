@@ -34,9 +34,7 @@
 #include <atomic>
 #include <CivetServer.h>
 
-#ifdef WIN32
-#include "WinUtils.h"
-#endif
+#include "PlatformUtils.h"
 
 template<typename T>
 class LabeledWindow : wxWindow
@@ -235,7 +233,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 	{
 		this->statusWindow->SetPosition(wxGetMousePosition() - this->statusWindow->GetSize());
 		this->statusWindow->Show();
-		SetForegroundWindow(this->statusWindow->GetHandle());
+		activateWindow(this->statusWindow);
 		
 		//this->Bind(wxEVT_TIMER, &QuickOpenTaskbarIcon::focusTimerFunction, this);
 		//(new wxTimer(this))->StartOnce(1000);
@@ -244,7 +242,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 public:
 	QuickOpenTaskbarIcon(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
 	{
-		this->SetIcon(wxIcon());
+		this->SetIcon(wxIcon(wxT("QuickOpen/test_icon.ico"), wxBITMAP_TYPE_ICO));
 		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
 
 		this->statusWindow = new TrayStatusWindow();
@@ -275,9 +273,16 @@ public:
 		{
 			std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::DEFAULT_CONFIG_PATH << "\"." << std::endl;
 		}
-		
+
 		configRef = std::make_shared<WriterReadersLock<AppConfig>>(config);
-		server = std::make_unique<QuickOpenWebServer>(configRef, *this);
+
+        try {
+            server = std::make_unique<QuickOpenWebServer>(configRef, *this);
+        }
+        catch(const std::exception& ex)
+        {
+            std::cout << ex.what() << std::endl;
+        }
 		
 		assert(configRef != nullptr);
 		this->icon = new QuickOpenTaskbarIcon(*configRef);
@@ -309,8 +314,12 @@ public:
 	}
 };
 
-inline bool promptForWebpageOpen(std::string URL)
+inline bool promptForWebpageOpen(QuickOpenApplication& app, std::string URL)
 {
-	auto response = wxMessageBox(wxT("Do you want to open the following webpage?\n") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
+    auto messageBoxLambda = [URL]{
+        return wxMessageBox(wxT("Do you want to open the following webpage?\n") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
+    };
+
+    int response = wxCallAfterSync<QuickOpenApplication, decltype(messageBoxLambda), int>(app, messageBoxLambda);
 	return (response == wxYES);
 }

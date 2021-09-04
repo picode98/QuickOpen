@@ -83,3 +83,8 @@ inline std::filesystem::path UTF8StrToPath(const std::string& UTF8Str)
 
 void shellExecuteFile(const wxFileName& filePath, const wxWindow* window = nullptr);
 void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile = nullptr);
+
+inline void activateWindow(wxWindow* window)
+{
+    SetForegroundWindow(window->GetHandle());
+}

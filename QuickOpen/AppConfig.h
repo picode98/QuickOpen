@@ -1,8 +1,9 @@
 #pragma once
 
-#ifdef _WIN32
-#include "WinUtils.h"
-#endif
+#include "PlatformUtils.h"
+
+#include <wx/wx.h>
+#include <wx/filename.h>
 
 #include <nlohmann/json.hpp>
 #include "Utils.h"
@@ -11,6 +12,24 @@
 #include <fstream>
 #include <filesystem>
 #include <map>
+
+namespace SettingRetrieval
+{
+    template<typename T>
+    bool getSettingWarn(const nlohmann::json& config, const std::string& key, T& destination)
+    {
+        try
+        {
+            destination = config.at(key);
+            return true;
+        }
+        catch (const nlohmann::json::out_of_range&)
+        {
+            std::cerr << "WARNING: Expected key \"" << key << "\" did not exist in the following settings object: " << config << std::endl;
+            return false;
+        }
+    }
+}
 
 struct AppConfig
 {
@@ -26,36 +45,6 @@ struct AppConfig
 	wxFileName fileSavePath;
 
 	long maxSaveFileSize = 1 << 20;
-
-	template<typename T>
-	static bool getSettingWarn(const nlohmann::json& config, const std::string& key, T& destination)
-	{
-		try
-		{
-			destination = config.at(key).get<T>();
-			return true;
-		}
-		catch (const nlohmann::json::out_of_range&)
-		{
-			std::cerr << "WARNING: Expected key \"" << key << "\" did not exist in the following settings object: " << config << std::endl;
-			return false;
-		}
-	}
-
-	//template<>
-	//static bool getSettingWarn<wxString>(const nlohmann::json& config, const std::string& key, wxString& destination)
-	//{
-	//	std::string strVal;
-	//	bool successVal = getSettingWarn(config, key, strVal);
-	//	if(successVal)
-	//	{
-	//		destination = wxString::FromUTF8(strVal);
-	//	}
-	//	return successVal;
-	//}
-
-	static bool getSettingWarn(const nlohmann::json& config, const std::string& key, wxFileName& destination,
-	                           bool isDir);
 
 	void saveConfig(const std::filesystem::path& filePath = DEFAULT_CONFIG_PATH);
 

@@ -372,7 +372,7 @@ FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDe
 	for(const auto& thisFile : requestInfo.fileList)
 	{
 		itemListSizer->Add(new wxStaticText(itemListPanel, wxID_ANY, wxString(wxT('\"')) << thisFile.filename << wxT("\" (")
-			<< wxFileName::GetHumanReadableSize(thisFile.fileSize) << wxT(")")));
+			<< wxFileName::GetHumanReadableSize(wxULongLong(thisFile.fileSize)) << wxT(")")));
 		itemListSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 	}
 	itemListPanel->SetSizer(itemListSizer);
