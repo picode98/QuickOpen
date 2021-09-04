@@ -5,7 +5,7 @@
 #ifndef QUICKOPEN_PLATFORMUTILS_H
 #define QUICKOPEN_PLATFORMUTILS_H
 
-#ifdef WIN32
+#ifdef _MSC_VER
 #include "WinUtils.h"
 #else
 #ifdef __linux__

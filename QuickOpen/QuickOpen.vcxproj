@@ -134,10 +134,10 @@
     <ClCompile Include="AppConfig.cpp" />
     <ClCompile Include="AppGUI.cpp" />
     <ClCompile Include="GUIUtils.cpp" />
+    <ClCompile Include="PlatformUtils.cpp" />
     <ClCompile Include="TrayStatusWindow.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="WebServer.cpp" />
-    <ClCompile Include="WinUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json" />
@@ -148,6 +148,8 @@
     <ClInclude Include="AppConfig.h" />
     <ClInclude Include="AppGUI.h" />
     <ClInclude Include="GUIUtils.h" />
+    <ClInclude Include="LinuxUtils.h" />
+    <ClInclude Include="PlatformUtils.h" />
     <ClInclude Include="TrayStatusWindow.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="WebServer.h" />

@@ -2,7 +2,7 @@
 // Created by sdk on 8/30/21.
 //
 
-#ifdef WIN32
+#ifdef _MSC_VER
 #include "WinUtils.cpp"
 #else
 #ifdef __linux__

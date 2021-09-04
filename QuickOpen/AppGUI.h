@@ -242,7 +242,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 public:
 	QuickOpenTaskbarIcon(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
 	{
-		this->SetIcon(wxIcon(wxT("QuickOpen/test_icon.ico"), wxBITMAP_TYPE_ICO));
+		this->SetIcon(wxIcon(wxT("test_icon.ico"), wxBITMAP_TYPE_ICO));
 		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
 
 		this->statusWindow = new TrayStatusWindow();
