@@ -13,4 +13,4 @@ cmake_minimum_required (VERSION 3.8)
 project ("QuickOpen")
 
 # Include sub-projects.
-add_subdirectory ("QuickOpenCommon")
+add_subdirectory ("QuickOpen")

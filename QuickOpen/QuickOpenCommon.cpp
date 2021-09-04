@@ -1,4 +1,4 @@
-﻿// QuickOpenCommon.cpp : Defines the entry point for the application.
+﻿// QuickOpen.cpp : Defines the entry point for the application.
 //
 
 #include "QuickOpenCommon.h"
