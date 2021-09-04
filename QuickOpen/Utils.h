@@ -2,6 +2,7 @@
 
 #include <wx/string.h>
 #include <wx/crt.h>
+#include <wx/filename.h>
 
 #include <memory>
 #include <shared_mutex>
@@ -10,6 +11,33 @@
 #include <map>
 
 #include <civetweb.h>
+
+#include <nlohmann/json.hpp>
+
+namespace nlohmann
+{
+	template<>
+	struct adl_serializer<wxString>
+	{
+		static void to_json(json& j, const wxString& opt)
+		{
+			j = opt.ToUTF8();
+		}
+
+		static void from_json(const json& j, wxString& opt)
+		{
+			assert(j.is_string());
+			opt.assign(wxString::FromUTF8(j.get<std::string>()));
+		}
+	};
+}
+
+inline wxFileName getDirName(const wxFileName& fileName)
+{
+	wxFileName newFileName(fileName);
+	newFileName.SetFullName(wxEmptyString);
+	return newFileName;
+}
 
 template<typename T>
 class WriterReadersLock

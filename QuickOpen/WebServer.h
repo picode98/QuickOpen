@@ -131,33 +131,42 @@ public:
 	bool handlePost(CivetServer* server, mg_connection* conn) override;
 };
 
-struct RequestedFileInfo
+struct FileConsentRequestInfo
 {
-	wxString filename;
-	unsigned long long fileSize;
-
-	wxFileName consentedFileName;
-
-	static RequestedFileInfo fromJSON(const nlohmann::json& json)
+	struct RequestedFileInfo
 	{
-		return { wxString::FromUTF8(json["filename"]), json["fileSize"] };
-	}
+		wxString filename;
+		unsigned long long fileSize;
 
-	nlohmann::json toJSON()
-	{
-		return {
-			{ "filename", filename.ToUTF8() },
-			{ "fileSize", fileSize }
-		};
-	}
+		wxFileName consentedFileName;
+
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(RequestedFileInfo, filename, fileSize)
+
+			//static RequestedFileInfo fromJSON(const nlohmann::json& json)
+			//{
+			//	return { wxString::FromUTF8(json["filename"]), json["fileSize"] };
+			//}
+
+			//nlohmann::json toJSON()
+			//{
+			//	return {
+			//		{ "filename", filename.ToUTF8() },
+			//		{ "fileSize", fileSize }
+			//	};
+			//}
+	};
+
+	std::vector<RequestedFileInfo> fileList;
+
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(FileConsentRequestInfo, fileList)
 };
 
 class FileConsentTokenService : public CivetHandler
 {
-	static const size_t MAX_REQUEST_BODY_SIZE = 1 << 16;
+	// static const size_t MAX_REQUEST_BODY_SIZE = 1 << 16;
 
 public:
-	typedef std::map<ConsentToken, RequestedFileInfo> TokenMap;
+	typedef std::map<ConsentToken, FileConsentRequestInfo::RequestedFileInfo> TokenMap;
 	WriterReadersLock<TokenMap> tokenWRRef;
 private:
 	// TokenMap tokens;

@@ -124,7 +124,7 @@ class QuickOpenSettings : public wxFrame
 	wxStaticBox* fileOpenSaveGroup;
 	wxStaticBoxSizer* fileOpenSaveGroupSizer;
 	wxDirPickerCtrl* saveFolderPicker;
-	wxCheckBox* savePromptEachFileCheckbox;
+	wxCheckBox* saveUseLastFolderCheckbox;
 	
 	wxButton* cancelButton;
 	wxButton* saveButton;
@@ -144,16 +144,23 @@ public:
 
 	void OnCustomBrowserBrowseButtonClicked(wxCommandEvent& event);
 
-	void OnSavePromptCheckboxChecked(wxCommandEvent& event);
+	void OnSaveUseLastFolderCheckboxChecked(wxCommandEvent& event);
 
 	void updateSaveFolderEnabledState();
 };
 
 class FileOpenSaveConsentDialog : public wxDialog
 {
+	std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
+
 	wxButton* acceptButton = nullptr;
 	wxButton* rejectButton = nullptr;
 	wxFilePickerCtrl* destFilenameInput = nullptr;
+	wxDirPickerCtrl* destFolderNameInput = nullptr;
+
+	FileConsentRequestInfo requestInfo;
+
+	bool multiFileLayout = false;
 public:
 	enum ResultCode
 	{
@@ -161,13 +168,14 @@ public:
 		DECLINE
 	};
 
-	FileOpenSaveConsentDialog(const wxFileName& defaultDestination, unsigned long long fileSize);
+	FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo,
+		std::shared_ptr<WriterReadersLock<AppConfig>> configRef);
 
 	void OnAcceptClicked(wxCommandEvent& event);
 
 	void OnDeclineClicked(wxCommandEvent& event);
 
-	wxFileName getConsentedFilename() const;
+	std::vector<wxFileName> getConsentedFilenames() const;
 };
 
 //wxBEGIN_EVENT_TABLE(TrayStatusWindow::ActivityList, wxScrolledWindow)

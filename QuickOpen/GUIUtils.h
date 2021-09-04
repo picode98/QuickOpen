@@ -2,6 +2,12 @@
 
 #include <wx/wx.h>
 
+template<typename T>
+T& getValidator(wxWindow* obj)
+{
+	return dynamic_cast<T&>(*(obj->GetValidator()));
+}
+
 const int DEFAULT_CONTROL_SPACING = 7;
 const wxColour ERROR_TEXT_COLOR = wxColour(0x0000a0);
 

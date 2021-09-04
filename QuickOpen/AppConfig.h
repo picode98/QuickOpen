@@ -6,6 +6,7 @@
 #include <wx/filename.h>
 
 #include <nlohmann/json.hpp>
+#include "Utils.h"
 // #include <boost/serialization/arc>
 
 #include <fstream>
@@ -40,7 +41,7 @@ struct AppConfig
 	wxString browserID;
 	wxString customBrowserPath;
 
-	bool alwaysPromptSave = true;
+	bool saveUseLastFolder = true;
 	wxFileName fileSavePath;
 
 	long maxSaveFileSize = 1 << 20;
