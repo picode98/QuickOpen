@@ -9,6 +9,8 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <comdef.h>
+#include <Wbemidl.h>
 #include <shellapi.h>
 #include <bcrypt.h>
 
@@ -51,6 +53,79 @@ void handleWinAPIError(LSTATUS retVal, bool checkGLE = true);
 tstring readRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName);
 void startSubprocess(const wxString& commandLine);
 tstring substituteWinShellFormatString(const tstring& format, const std::vector<tstring>& args);
+
+void initializeCOM();
+
+class WMIResultIterator
+{
+	IEnumWbemClassObject* wmiIterator = nullptr;
+	IWbemClassObject* currentResult = nullptr;
+
+public:
+	WMIResultIterator(IEnumWbemClassObject* wmiIterator):
+		wmiIterator(wmiIterator)
+	{
+		++(*this);
+	}
+
+	WMIResultIterator(const WMIResultIterator& existing)
+	{
+		existing.wmiIterator->Clone(&wmiIterator);
+
+		if (currentResult != nullptr)
+		{
+			existing.currentResult->Clone(&currentResult);
+		}
+	}
+
+	IWbemClassObject* operator->() const
+	{
+		return currentResult;
+	}
+
+	WMIResultIterator& operator++()
+	{
+		if(currentResult != nullptr)
+		{
+			currentResult->Release();
+		}
+
+		ULONG numResults;
+		wmiIterator->Next(WBEM_INFINITE, 1, &currentResult, &numResults);
+
+		if(numResults == 0)
+		{
+			currentResult = nullptr;
+		}
+
+		return *this;
+	}
+
+	operator bool() const
+	{
+		return currentResult != nullptr;
+	}
+
+	~WMIResultIterator()
+	{
+		wmiIterator->Release();
+
+		if(currentResult != nullptr)
+		{
+			currentResult->Release();
+		}
+	}
+};
+
+WMIResultIterator runWMIQuery(const wxString& wmiNamespace, const wxString& query);
+
+struct NetworkInterfaceInfo
+{
+	wxString GUID, interfaceName, driverName;
+	std::vector<wxString> IPAddresses;
+};
+
+std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces();
 
 struct WebBrowserInfo
 {

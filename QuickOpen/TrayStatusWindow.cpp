@@ -1,6 +1,8 @@
 #include "TrayStatusWindow.h"
 
 #include <wx/clipbrd.h>
+#include <wx/hyperlink.h>
+#include <wx/url.h>
 
 #include "GUIUtils.h"
 #include "PlatformUtils.h"
@@ -39,6 +41,7 @@ TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen
 {
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
 	this->SetSizer(topLevelSizer);
+	topLevelSizer->Add(new ServerURLDisplay(this, getPhysicalNetworkInterfaces(), 8080), wxSizerFlags(0).Expand());
 	topLevelSizer->Add(activityList = new ActivityList(this), wxSizerFlags(1).Expand());
 }
 
@@ -329,4 +332,38 @@ void TrayStatusWindow::ActivityList::removeActivity(ActivityEntry* entry)
 		topLevelSizer->Show(noItemsElement, true, true);
 		this->Layout();
 	}
+}
+
+TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort):
+	wxWindow(parent, wxID_ANY)
+{
+	auto* topLevelSizer = new wxBoxSizer(wxVERTICAL);
+	headerText = new wxStaticText(this, wxID_ANY, wxT("To open content on this computer, share the following links with others on your network:"));
+	topLevelSizer->Add(headerText, wxSizerFlags(0).Expand());
+
+	for(const NetworkInterfaceInfo& thisInterface : interfaces)
+	{
+		if (!thisInterface.IPAddresses.empty())
+		{
+			auto* interfaceText = new wxStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(" (") << thisInterface.driverName << wxT("):"));
+			interfaceText->SetFont(interfaceText->GetFont().Bold());
+			topLevelSizer->Add(
+				interfaceText,
+				wxSizerFlags(0).Expand()
+			);
+
+			for (const wxString& thisAddress : thisInterface.IPAddresses)
+			{
+				wxString thisURL = wxString() << wxT("http://")
+					<< (thisAddress.Contains(wxT(":")) ? (wxT("[") + thisAddress + wxT("]")) : thisAddress) << wxT(":") << serverPort;
+
+				topLevelSizer->Add(
+					new wxHyperlinkCtrl(this, wxID_ANY, thisURL, thisURL),
+					wxSizerFlags(0).Expand().Border(wxLEFT, this->FromDIP(10))
+				);
+			}
+		}
+	}
+
+	this->SetSizerAndFit(topLevelSizer);
 }

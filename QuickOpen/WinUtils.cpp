@@ -1,5 +1,7 @@
 #include "WinUtils.h"
 
+#include <map>
+
 std::wstring UTF8StrToWideStr(const std::string& UTF8Str)
 {
 	int reqBufSize = MultiByteToWideChar(CP_UTF8, 0, UTF8Str.c_str(), UTF8Str.size(), nullptr, 0);
@@ -276,4 +278,103 @@ void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile
 			wxString() << wxT("\"") << explorerPath.GetFullPath() << wxT("\" /select,\"") << folder.GetFullPath() <<
 			wxT("\""));
 	}
+}
+
+void initializeCOM()
+{
+	handleWinAPIError(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
+
+	try
+	{
+		handleWinAPIError(CoInitializeSecurity(nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
+			RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr));
+	}
+	catch (const WindowsException&)
+	{
+		CoUninitialize();
+		throw;
+	}
+}
+
+WMIResultIterator runWMIQuery(const wxString& wmiNamespace, const wxString& query)
+{
+	// initializeCOM();
+	SetLastError(ERROR_SUCCESS);
+
+	IWbemLocator* wmiLocator = nullptr;
+	handleWinAPIError(CoCreateInstance(CLSID_WbemLocator, nullptr, CLSCTX_INPROC_SERVER,
+		IID_IWbemLocator, reinterpret_cast<LPVOID*>(&wmiLocator)), false);
+
+	IWbemServices* wmiSvc = nullptr;
+	handleWinAPIError(wmiLocator->ConnectServer(_bstr_t(wmiNamespace.ToStdWstring().c_str()), nullptr, nullptr,
+		nullptr, 0, nullptr, nullptr, &wmiSvc), false);
+
+	handleWinAPIError(CoSetProxyBlanket(wmiSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
+		RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE), false);
+
+	IEnumWbemClassObject* resultIterator = nullptr;
+	handleWinAPIError(wmiSvc->ExecQuery(_bstr_t("WQL"), _bstr_t(query.ToStdWstring().c_str()),
+		WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, &resultIterator), false);
+
+	return WMIResultIterator(resultIterator);
+}
+
+inline wxString bStrToWXString(BSTR bStr)
+{
+	return wxString(std::wstring(bStr, SysStringLen(bStr)));
+}
+
+std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
+{
+	std::vector<NetworkInterfaceInfo> resultList;
+	std::map<_bstr_t, _bstr_t> interfaceIDs;
+
+	{
+		WMIResultIterator iter = runWMIQuery(wxT("root\\StandardCimv2"), wxT("SELECT DeviceID, Name FROM MSFT_NetAdapter WHERE ConnectorPresent = TRUE"));
+		while (iter)
+		{
+			VARIANT IDProp, intNameProp;
+			iter->Get(L"DeviceID", 0, &IDProp, nullptr, nullptr);
+			iter->Get(L"Name", 0, &intNameProp, nullptr, nullptr);
+
+			interfaceIDs.insert({ IDProp.bstrVal, intNameProp.bstrVal });
+
+			++iter;
+		}
+	}
+
+	{
+		WMIResultIterator iter = runWMIQuery(wxT("root\\CIMV2"), wxT("SELECT Description, IPAddress, SettingID FROM Win32_NetworkAdapterConfiguration"));
+		while (iter)
+		{
+			VARIANT IDProp;
+			iter->Get(L"SettingID", 0, &IDProp, nullptr, nullptr);
+			if(interfaceIDs.count(IDProp.bstrVal) > 0)
+			{
+				VARIANT driverNameProp, addressesProp;
+
+				iter->Get(L"Description", 0, &driverNameProp, nullptr, nullptr);
+				iter->Get(L"IPAddress", 0, &addressesProp, nullptr, nullptr);
+
+				std::vector<wxString> addresses;
+
+				LONG i, upperBound;
+				SafeArrayGetLBound(addressesProp.parray, 1, &i);
+				SafeArrayGetUBound(addressesProp.parray, 1, &upperBound);
+				for(; i <= upperBound; ++i)
+				{
+					BSTR thisAddressObj;
+					// VariantInit(&thisAddressObj);
+					handleWinAPIError(SafeArrayGetElement(V_ARRAY(&addressesProp), &i, &thisAddressObj), false);
+					addresses.push_back(bStrToWXString(thisAddressObj));
+				}
+
+				resultList.push_back({ bStrToWXString(IDProp.bstrVal), bStrToWXString(interfaceIDs[IDProp.bstrVal]), bStrToWXString(driverNameProp.bstrVal), addresses });
+			}
+
+			++iter;
+		}
+	}
+
+	return resultList;
 }

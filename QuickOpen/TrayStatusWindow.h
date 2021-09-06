@@ -9,6 +9,7 @@
 #include <atomic>
 
 #include "GUIUtils.h"
+#include "PlatformUtils.h"
 
 class TrayStatusWindow : public wxFrame
 {
@@ -102,6 +103,13 @@ public:
 		void removeActivity(ActivityEntry* entry);
 
 		// wxDECLARE_EVENT_TABLE();
+	};
+
+	class ServerURLDisplay : public wxWindow
+	{
+		wxStaticText* headerText = nullptr;
+	public:
+		ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort);
 	};
 private:
 	wxBoxSizer* topLevelSizer = nullptr;

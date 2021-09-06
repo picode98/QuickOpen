@@ -218,7 +218,7 @@ public:
 	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef):
 		CivetServer({
 			"document_root", STATIC_PATH.generic_string(),
-			"listening_ports", std::to_string(PORT)
+			"listening_ports", '+' + std::to_string(PORT)
 		}),
 		wrLock(wrLock),
 		staticHandler("/"),
