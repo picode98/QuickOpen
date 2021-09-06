@@ -356,20 +356,25 @@ std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
 				iter->Get(L"Description", 0, &driverNameProp, nullptr, nullptr);
 				iter->Get(L"IPAddress", 0, &addressesProp, nullptr, nullptr);
 
-				std::vector<wxString> addresses;
-
-				LONG i, upperBound;
-				SafeArrayGetLBound(addressesProp.parray, 1, &i);
-				SafeArrayGetUBound(addressesProp.parray, 1, &upperBound);
-				for(; i <= upperBound; ++i)
+				if (addressesProp.parray != nullptr)
 				{
-					BSTR thisAddressObj;
-					// VariantInit(&thisAddressObj);
-					handleWinAPIError(SafeArrayGetElement(V_ARRAY(&addressesProp), &i, &thisAddressObj), false);
-					addresses.push_back(bStrToWXString(thisAddressObj));
-				}
+					std::vector<wxString> addresses;
 
-				resultList.push_back({ bStrToWXString(IDProp.bstrVal), bStrToWXString(interfaceIDs[IDProp.bstrVal]), bStrToWXString(driverNameProp.bstrVal), addresses });
+					LONG i, upperBound;
+
+					handleWinAPIError(SafeArrayGetLBound(addressesProp.parray, 1, &i), false);
+					handleWinAPIError(SafeArrayGetUBound(addressesProp.parray, 1, &upperBound), false);
+
+					for (; i <= upperBound; ++i)
+					{
+						BSTR thisAddressObj;
+						// VariantInit(&thisAddressObj);
+						handleWinAPIError(SafeArrayGetElement(V_ARRAY(&addressesProp), &i, &thisAddressObj), false);
+						addresses.push_back(bStrToWXString(thisAddressObj));
+					}
+
+					resultList.push_back({ bStrToWXString(IDProp.bstrVal), bStrToWXString(interfaceIDs[IDProp.bstrVal]), bStrToWXString(driverNameProp.bstrVal), addresses });
+				}
 			}
 
 			++iter;

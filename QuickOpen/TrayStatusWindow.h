@@ -113,9 +113,11 @@ public:
 	};
 private:
 	wxBoxSizer* topLevelSizer = nullptr;
+	ServerURLDisplay* URLDisplay = nullptr;
 	ActivityList* activityList = nullptr;
 
 	void OnWindowActivationChanged(wxActivateEvent& event);
+	void OnShow(wxShowEvent& event);
 	void fitActivityListWidth();
 
 public:

@@ -21,6 +21,19 @@ void TrayStatusWindow::OnWindowActivationChanged(wxActivateEvent& event)
 	event.Skip();
 }
 
+void TrayStatusWindow::OnShow(wxShowEvent& event)
+{
+	if (event.IsShown())
+	{
+		auto* newDisplay = new ServerURLDisplay(this, getPhysicalNetworkInterfaces(), 8080);
+		topLevelSizer->Replace(URLDisplay, newDisplay);
+		this->RemoveChild(URLDisplay);
+		URLDisplay->Destroy();
+		URLDisplay = newDisplay;
+		this->Layout();
+	}
+}
+
 void TrayStatusWindow::fitActivityListWidth()
 {
 	static const int WIDTH_PADDING = 50;
@@ -41,7 +54,7 @@ TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen
 {
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
 	this->SetSizer(topLevelSizer);
-	topLevelSizer->Add(new ServerURLDisplay(this, getPhysicalNetworkInterfaces(), 8080), wxSizerFlags(0).Expand());
+	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(this, getPhysicalNetworkInterfaces(), 8080), wxSizerFlags(0).Expand());
 	topLevelSizer->Add(activityList = new ActivityList(this), wxSizerFlags(1).Expand());
 }
 
@@ -77,7 +90,8 @@ void TrayStatusWindow::SetFocus()
 }
 
 wxBEGIN_EVENT_TABLE(TrayStatusWindow, wxFrame)
-EVT_ACTIVATE(TrayStatusWindow::OnWindowActivationChanged)
+	EVT_ACTIVATE(TrayStatusWindow::OnWindowActivationChanged)
+	EVT_SHOW(TrayStatusWindow::OnShow)
 wxEND_EVENT_TABLE()
 
 void TrayStatusWindow::WebpageOpenedActivityEntry::OnCopyURLButtonClick(wxCommandEvent& event)
@@ -338,7 +352,9 @@ TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std
 	wxWindow(parent, wxID_ANY)
 {
 	auto* topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	headerText = new wxStaticText(this, wxID_ANY, wxT("To open content on this computer, share the following links with others on your network:"));
+	headerText = new wxStaticText(this, wxID_ANY, interfaces.empty() ?
+		wxT("No active LAN connections detected. Connect to a LAN to open content on this computer.") :
+		wxT("To open content on this computer, share the following links with others on your network:"));
 	topLevelSizer->Add(headerText, wxSizerFlags(0).Expand());
 
 	for(const NetworkInterfaceInfo& thisInterface : interfaces)
