@@ -174,6 +174,7 @@ bool StaticHandler::handleGet(CivetServer* server, mg_connection* conn)
 bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn)
 {
 	auto postParams = parseFormEncodedBody(conn);
+	wxString senderIP = mg_get_request_info(conn)->remote_addr;
 
 	if (postParams.count("url") > 0)
 	{
@@ -181,7 +182,45 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 		if (std::regex_match(url, std::regex("^https?:(\\/\\/)?[a-z|\\d|-|\\.]+($|\\/\\S*$)",
 			std::regex_constants::icase | std::regex_constants::ECMAScript)))
 		{
-			if (promptForWebpageOpen(wxAppRef, url))
+			bool openAllowed;
+			{
+				std::lock_guard<std::mutex> lock(consentDialogMutex);
+
+				bool thisIPBanned = false, banRequested = false;
+				{
+					WriterReadersLock<std::set<wxString>>::ReadableReference ref(bannedIPRef);
+					thisIPBanned = (ref->count(senderIP) > 0);
+				}
+
+				if (!thisIPBanned)
+				{
+					openAllowed = promptForWebpageOpen(wxAppRef, url, wxT("the IP address ") + senderIP, banRequested);
+				}
+
+				if(thisIPBanned || banRequested)
+				{
+					if(banRequested)
+					{
+						WriterReadersLock<std::set<wxString>>::WritableReference ref(bannedIPRef);
+
+						if (ref->count(senderIP) == 0)
+						{
+							ref->insert(senderIP);
+						}
+					}
+
+					auto jsonErrorInfo = nlohmann::json(FormErrorList{
+					{
+						{"", "This IP address is banned from sending or opening further content."}
+					}
+						});
+					sendJSONResponse(conn, 403, jsonErrorInfo);
+
+					return true;
+				}
+			}
+
+			if (openAllowed)
 			{
 				wxString wxURL = wxString::FromUTF8(postParams["url"]);
 
@@ -286,9 +325,11 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 	//std::mutex dialogResultMutex;
 	//std::unique_lock<std::mutex> dialogResultLock(dialogResultMutex);
 
-	auto consentDlgLambda = [this, &defaultDestDir, &rqFileInfo]
+	wxString remoteIP = mg_get_request_info(conn)->remote_addr;
+
+	auto consentDlgLambda = [this, &defaultDestDir, &rqFileInfo, &remoteIP]
 	{
-		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo, this->configLock);
+		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo, this->configLock, wxT("the remote IP ") + remoteIP);
 		consentDlg.Show();
 		consentDlg.RequestUserAttention();
 		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
@@ -299,12 +340,49 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 			rqFileInfo.fileList[i].consentedFileName = consentedFileNames[i];
 		}
 
-		return resultVal;
+		return std::pair{ resultVal, consentDlg.denyFutureRequestsRequested() };
 	};
 
-	FileOpenSaveConsentDialog::ResultCode result =
-		wxCallAfterSync<QuickOpenApplication, decltype(consentDlgLambda), FileOpenSaveConsentDialog::ResultCode>(
-			wxAppRef, consentDlgLambda);
+	FileOpenSaveConsentDialog::ResultCode result;
+	bool denyFuture = false;
+	{
+		std::lock_guard<std::mutex> lock(consentDialogMutex);
+
+		bool thisIPBanned = false;
+		{
+			WriterReadersLock<std::set<wxString>>::ReadableReference ref(bannedIPRef);
+			thisIPBanned = (ref->count(remoteIP) > 0);
+		}
+
+		if (!thisIPBanned)
+		{
+			std::tie(result, denyFuture) = wxCallAfterSync<QuickOpenApplication, decltype(consentDlgLambda),
+				std::pair<FileOpenSaveConsentDialog::ResultCode, bool>>(
+					wxAppRef, consentDlgLambda);
+
+			if(denyFuture)
+			{
+				WriterReadersLock<std::set<wxString>>::WritableReference ref(bannedIPRef);
+
+				if(ref->count(remoteIP) == 0)
+				{
+					ref->insert(remoteIP);
+				}
+			}
+		}
+
+		if (thisIPBanned || denyFuture)
+		{
+			auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"", "This IP address is banned from sending or opening further content."}
+			}
+				});
+			sendJSONResponse(conn, 403, jsonErrorInfo);
+
+			return true;
+		}
+	}
 	//wxGetApp().CallAfter([&dialogResultMutex, &dialogResult, &resultCode, &destPath, &rqFileInfo]
 	//{
 	//	auto consentDlg = FileOpenSaveConsentDialog(destPath, rqFileInfo.fileSize);

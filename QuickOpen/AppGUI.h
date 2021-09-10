@@ -33,6 +33,7 @@
 #include "Utils.h"
 #include <atomic>
 #include <CivetServer.h>
+#include <wx/url.h>
 
 #include "PlatformUtils.h"
 
@@ -149,31 +150,117 @@ public:
 	void updateSaveFolderEnabledState();
 };
 
-class FileOpenSaveConsentDialog : public wxDialog
+class ConsentDialog : public wxDialog
+{
+protected:
+	wxButton* acceptButton = nullptr;
+	wxButton* rejectButton = nullptr;
+
+	wxCheckBox* denyFutureRequestsCheckbox = nullptr;
+
+	wxBoxSizer* topLevelSizer = nullptr;
+	wxWindow* content = nullptr;
+
+	virtual void OnAcceptClicked(wxCommandEvent& event)
+	{
+		this->EndModal(ACCEPT);
+	}
+
+	virtual void OnDeclineClicked(wxCommandEvent& event)
+	{
+		this->EndModal(DECLINE);
+	}
+
+	virtual void OnDenyFutureRequestsCheckboxChecked(wxCommandEvent& event)
+	{
+		this->acceptButton->Enable(!this->denyFutureRequestsCheckbox->IsChecked());
+	}
+
+	void setContent(wxWindow* newContent)
+	{
+		topLevelSizer->Replace(content, newContent);
+		content->Destroy();
+		content = newContent;
+		this->Fit();
+	}
+public:
+	ConsentDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxString& requesterName) : wxDialog(parent, id, title, wxDefaultPosition, wxDefaultSize,
+		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+	{
+		wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
+		topLevelSizer = new wxBoxSizer(wxVERTICAL);
+		windowPaddingSizer->Add(topLevelSizer, wxSizerFlags(1).Expand().Border(wxALL, DEFAULT_CONTROL_SPACING));
+
+		topLevelSizer->Add(content = new wxWindow(this, wxID_ANY), wxSizerFlags(1).Expand());
+
+		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+		topLevelSizer->Add(denyFutureRequestsCheckbox = new wxCheckBox(this, wxID_ANY, wxT("Decline future requests from ") + requesterName + wxT(" (until QuickOpen is restarted)")),
+			wxSizerFlags(0).Expand());
+		denyFutureRequestsCheckbox->Bind(wxEVT_CHECKBOX, &ConsentDialog::OnDenyFutureRequestsCheckboxChecked, this);
+
+		auto* bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL);
+
+		bottomButtonSizer->AddStretchSpacer(1);
+		bottomButtonSizer->Add(acceptButton = new wxButton(this, wxID_ANY, wxT("Accept")));
+		bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+		bottomButtonSizer->Add(rejectButton = new wxButton(this, wxID_ANY, wxT("Decline")));
+
+		topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
+
+		acceptButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnAcceptClicked, this);
+		rejectButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnDeclineClicked, this);
+
+		this->SetSizerAndFit(windowPaddingSizer);
+	}
+
+	bool denyFutureRequestsRequested() const
+	{
+		return this->denyFutureRequestsCheckbox->IsChecked();
+	}
+
+	enum ResultCode
+	{
+		ACCEPT,
+		DECLINE
+	};
+};
+
+class WebpageOpenConsentDialog : public ConsentDialog
+{
+	wxStaticText* headerText = nullptr;
+public:
+	WebpageOpenConsentDialog(const wxString& URL, const wxString& requesterName) :
+		ConsentDialog(nullptr, wxID_ANY, wxT("Webpage Open Request"), requesterName)
+	{
+		wxWindow* contentWindow = new wxWindow(this, wxID_ANY);
+		wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
+		contentSizer->Add(headerText = new wxStaticText(contentWindow, wxID_ANY,
+			wxString() << wxT("A user at " << requesterName << wxT(" is requesting that you open the following URL:\n\n") << URL
+				<< wxT("\n\nWould you like to proceed?"))), wxSizerFlags(0).Expand());
+
+		contentWindow->SetSizerAndFit(contentSizer);
+		this->setContent(contentWindow);
+	}
+};
+
+class FileOpenSaveConsentDialog : public ConsentDialog
 {
 	std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
 
-	wxButton* acceptButton = nullptr;
-	wxButton* rejectButton = nullptr;
+	wxFileName defaultDestinationFolder;
 	wxFilePickerCtrl* destFilenameInput = nullptr;
 	wxDirPickerCtrl* destFolderNameInput = nullptr;
 
 	FileConsentRequestInfo requestInfo;
 
 	bool multiFileLayout = false;
+
+	virtual void OnAcceptClicked(wxCommandEvent& event);
+
 public:
-	enum ResultCode
-	{
-		ACCEPT,
-		DECLINE
-	};
-
 	FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo,
-		std::shared_ptr<WriterReadersLock<AppConfig>> configRef);
-
-	void OnAcceptClicked(wxCommandEvent& event);
-
-	void OnDeclineClicked(wxCommandEvent& event);
+		std::shared_ptr<WriterReadersLock<AppConfig>> configRef, const wxString& requesterName);
 
 	std::vector<wxFileName> getConsentedFilenames() const;
 };
@@ -242,7 +329,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 public:
 	QuickOpenTaskbarIcon(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
 	{
-		this->SetIcon(wxIcon(wxT("test_icon.ico"), wxBITMAP_TYPE_ICO));
+		this->SetIcon(wxIcon(wxT("test_icon.ico"), wxBITMAP_TYPE_ICO), wxT("QuickOpen"));
 		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
 
 		this->statusWindow = new TrayStatusWindow();
@@ -314,12 +401,16 @@ public:
 	}
 };
 
-inline bool promptForWebpageOpen(QuickOpenApplication& app, std::string URL)
+inline bool promptForWebpageOpen(QuickOpenApplication& app, std::string URL, const wxString& requesterName, bool& banRequested)
 {
-    auto messageBoxLambda = [URL]{
-        return wxMessageBox(wxT("Do you want to open the following webpage?\n") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
+    auto messageBoxLambda = [URL, &requesterName, &banRequested]{
+		auto dialog = WebpageOpenConsentDialog(URL, requesterName);
+		auto result = static_cast<ConsentDialog::ResultCode>(dialog.ShowModal());
+		banRequested = dialog.denyFutureRequestsRequested();
+		return result;
+        // return wxMessageBox(wxT("Do you want to open the following webpage?\n") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
     };
 
-    int response = wxCallAfterSync<QuickOpenApplication, decltype(messageBoxLambda), int>(app, messageBoxLambda);
-	return (response == wxYES);
+    auto response = wxCallAfterSync<QuickOpenApplication, decltype(messageBoxLambda), ConsentDialog::ResultCode>(app, messageBoxLambda);
+	return (response == ConsentDialog::ACCEPT);
 }

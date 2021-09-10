@@ -29,6 +29,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <optional>
+#include <set>
 
 #include "PlatformUtils.h"
 
@@ -121,10 +122,15 @@ class OpenWebpageAPIEndpoint : public CivetHandler
 {
 	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
 	QuickOpenApplication& wxAppRef;
+	std::mutex& consentDialogMutex;
+	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 
 public:
-	OpenWebpageAPIEndpoint(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, QuickOpenApplication& wxAppRef): configLock(configLock),
-		wxAppRef(wxAppRef)
+	OpenWebpageAPIEndpoint(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, QuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef):
+		configLock(configLock),
+		consentDialogMutex(consentDialogMutex),
+		wxAppRef(wxAppRef),
+		bannedIPRef(bannedIPRef)
 	{}
 
 
@@ -172,10 +178,15 @@ private:
 	// TokenMap tokens;
 	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
 	QuickOpenApplication& wxAppRef;
+	std::mutex& consentDialogMutex;
+	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 
 public:
-	FileConsentTokenService(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, QuickOpenApplication& wxAppRef) : tokenWRRef(std::make_unique<TokenMap>()), configLock(configLock),
-		wxAppRef(wxAppRef)
+	FileConsentTokenService(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, QuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
+		tokenWRRef(std::make_unique<TokenMap>()), configLock(configLock),
+		consentDialogMutex(consentDialogMutex),
+		wxAppRef(wxAppRef),
+		bannedIPRef(bannedIPRef)
 	{}
 
 	bool handlePost(CivetServer* server, mg_connection* conn) override;
@@ -208,6 +219,9 @@ public:
 class QuickOpenWebServer : public CivetServer
 {
 	std::shared_ptr<WriterReadersLock<AppConfig>> wrLock;
+	std::mutex consentDialogMutex;
+
+	WriterReadersLock<std::set<wxString>> bannedIPs;
 
 	TestHandler testHandler;
 	StaticHandler staticHandler;
@@ -222,9 +236,10 @@ public:
 		}),
 		wrLock(wrLock),
 		staticHandler("/"),
-		webpageAPIEndpoint(wrLock, wxAppRef),
-		fileConsentTokenService(wrLock, wxAppRef),
-		fileAPIEndpoint(fileConsentTokenService, wxAppRef)
+		webpageAPIEndpoint(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
+		fileConsentTokenService(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
+		fileAPIEndpoint(fileConsentTokenService, wxAppRef),
+		bannedIPs(std::make_unique<std::set<wxString>>())
 	{
 		this->addHandler("/test", testHandler);
 		this->addHandler("/", staticHandler);

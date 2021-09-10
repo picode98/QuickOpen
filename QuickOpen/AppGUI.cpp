@@ -349,84 +349,6 @@ void QuickOpenSettings::updateSaveFolderEnabledState()
 	}
 }
 
-FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo, std::shared_ptr<WriterReadersLock<AppConfig>> configRef):
-	wxDialog(nullptr, wxID_ANY, wxT("Receiving File"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), requestInfo(requestInfo),
-	configRef(configRef)
-{
-	wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
-	wxBoxSizer* topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	windowPaddingSizer->Add(topLevelSizer, wxSizerFlags(1).Expand().Border(wxALL, DEFAULT_CONTROL_SPACING));
-
-	topLevelSizer->Add(new wxStaticText(this, wxID_ANY,
-	                                    wxString() << wxT("A user is sending the following ")
-	                                    << (requestInfo.fileList.size() > 1 ? (wxString() << requestInfo.fileList.size() << wxT(" files:")) : wxT("file:"))/* << defaultDestination.
-	                                    GetFullName() << wxT("\" (") << wxFileName::GetHumanReadableSize(fileSize) <<
-	                                    wxT(").\n")
-	                                    << wxT("Would you like to accept it?")*/
-	));
-	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-
-	auto itemListPanel = new wxScrolled<wxPanel>(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(400, 200)));
-	auto itemListSizer = new wxBoxSizer(wxVERTICAL);
-	topLevelSizer->Add(itemListPanel, wxSizerFlags(1).Expand());
-	for(const auto& thisFile : requestInfo.fileList)
-	{
-		itemListSizer->Add(new wxStaticText(itemListPanel, wxID_ANY, wxString(wxT('\"')) << thisFile.filename << wxT("\" (")
-			<< wxFileName::GetHumanReadableSize(wxULongLong(thisFile.fileSize)) << wxT(")")));
-		itemListSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-	}
-	itemListPanel->SetSizer(itemListSizer);
-	itemListPanel->FitInside();
-	itemListPanel->SetScrollRate(5, 5);
-
-	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-
-	if(requestInfo.fileList.size() == 1)
-	{
-		wxFileName defaultDestination(defaultDestinationFolder);
-		defaultDestination.SetFullName(requestInfo.fileList[0].filename);
-
-		topLevelSizer->Add(makeLabeledSizer(destFilenameInput =
-			new wxFilePickerCtrl(this, wxID_ANY, wxEmptyString,
-				wxT("Select Save Destination"),
-				wxString() << wxT(".") << defaultDestination.GetExt() <<
-				wxT(" files|*.") << defaultDestination.GetExt() << wxT(
-					"|All files|*.*"),
-				wxDefaultPosition, wxDefaultSize,
-				wxFLP_SAVE | wxFLP_USE_TEXTCTRL | wxFLP_OVERWRITE_PROMPT),
-			wxT("Save this file to:"), this), wxSizerFlags(0).Expand());
-
-		destFilenameInput->SetValidator(FilePathValidator(defaultDestination));
-	}
-	else
-	{
-		multiFileLayout = true;
-
-		topLevelSizer->Add(makeLabeledSizer(
-			destFolderNameInput = new wxDirPickerCtrl(this, wxID_ANY, defaultDestinationFolder.GetFullPath(), wxT("Select Save Destination Folder")),
-			wxT("Save files to:"), this), wxSizerFlags(0).Expand());
-
-		destFolderNameInput->SetValidator(FilePathValidator(defaultDestinationFolder, true));
-	}
-
-	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-
-	auto* bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL);
-
-	bottomButtonSizer->AddStretchSpacer(1);
-	bottomButtonSizer->Add(acceptButton = new wxButton(this, wxID_ANY, wxT("Accept")));
-	bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-	bottomButtonSizer->Add(rejectButton = new wxButton(this, wxID_ANY, wxT("Decline")));
-
-	topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
-
-	acceptButton->Bind(wxEVT_BUTTON, &FileOpenSaveConsentDialog::OnAcceptClicked, this);
-	rejectButton->Bind(wxEVT_BUTTON, &FileOpenSaveConsentDialog::OnDeclineClicked, this);
-
-	this->SetSizerAndFit(windowPaddingSizer);
-	this->TransferDataToWindow();
-}
-
 void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 {
 	if (this->Validate() && this->TransferDataFromWindow())
@@ -447,7 +369,7 @@ void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 			config->saveConfig();
 		}
 
-		this->EndModal(ACCEPT);
+		ConsentDialog::OnAcceptClicked(event);
 	}
 	else
 	{
@@ -455,9 +377,69 @@ void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 	}
 }
 
-void FileOpenSaveConsentDialog::OnDeclineClicked(wxCommandEvent& event)
+FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo,
+	std::shared_ptr<WriterReadersLock<AppConfig>> configRef, const wxString& requesterName) :
+	ConsentDialog(nullptr, wxID_ANY, wxT("Receiving File"), requesterName), requestInfo(requestInfo),
+	configRef(configRef), defaultDestinationFolder(defaultDestinationFolder)
 {
-	this->EndModal(DECLINE);
+	wxWindow* contentWindow = new wxWindow(this, wxID_ANY);
+	wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
+
+	contentSizer->Add(new wxStaticText(contentWindow, wxID_ANY,
+		wxString() << wxT("A user is sending the following ")
+		<< (requestInfo.fileList.size() > 1 ? (wxString() << requestInfo.fileList.size() << wxT(" files:")) : wxT("file:"))/* << defaultDestination.
+		GetFullName() << wxT("\" (") << wxFileName::GetHumanReadableSize(fileSize) <<
+		wxT(").\n")
+		<< wxT("Would you like to accept it?")*/
+	));
+	contentSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+	auto itemListPanel = new wxScrolled<wxPanel>(contentWindow, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(400, 200)));
+	auto itemListSizer = new wxBoxSizer(wxVERTICAL);
+	contentSizer->Add(itemListPanel, wxSizerFlags(1).Expand());
+	for (const auto& thisFile : requestInfo.fileList)
+	{
+		itemListSizer->Add(new wxStaticText(itemListPanel, wxID_ANY, wxString(wxT('\"')) << thisFile.filename << wxT("\" (")
+			<< wxFileName::GetHumanReadableSize(wxULongLong(thisFile.fileSize)) << wxT(")")));
+		itemListSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+	}
+	itemListPanel->SetSizer(itemListSizer);
+	itemListPanel->FitInside();
+	itemListPanel->SetScrollRate(5, 5);
+
+	contentSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+	if (requestInfo.fileList.size() == 1)
+	{
+		wxFileName defaultDestination(defaultDestinationFolder);
+		defaultDestination.SetFullName(requestInfo.fileList[0].filename);
+
+		contentSizer->Add(makeLabeledSizer(destFilenameInput =
+			new wxFilePickerCtrl(contentWindow, wxID_ANY, wxEmptyString,
+				wxT("Select Save Destination"),
+				wxString() << wxT(".") << defaultDestination.GetExt() <<
+				wxT(" files|*.") << defaultDestination.GetExt() << wxT(
+					"|All files|*.*"),
+				wxDefaultPosition, wxDefaultSize,
+				wxFLP_SAVE | wxFLP_USE_TEXTCTRL | wxFLP_OVERWRITE_PROMPT),
+			wxT("Save this file to:"), contentWindow), wxSizerFlags(0).Expand());
+
+		destFilenameInput->SetValidator(FilePathValidator(defaultDestination));
+	}
+	else
+	{
+		multiFileLayout = true;
+
+		contentSizer->Add(makeLabeledSizer(
+			destFolderNameInput = new wxDirPickerCtrl(contentWindow, wxID_ANY, defaultDestinationFolder.GetFullPath(), wxT("Select Save Destination Folder")),
+			wxT("Save files to:"), contentWindow), wxSizerFlags(0).Expand());
+
+		destFolderNameInput->SetValidator(FilePathValidator(defaultDestinationFolder, true));
+	}
+
+	contentWindow->SetSizerAndFit(contentSizer);
+	contentWindow->TransferDataToWindow();
+	this->setContent(contentWindow);
 }
 
 std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
