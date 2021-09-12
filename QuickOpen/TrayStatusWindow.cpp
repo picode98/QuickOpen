@@ -25,9 +25,9 @@ void TrayStatusWindow::OnShow(wxShowEvent& event)
 {
 	if (event.IsShown())
 	{
-		auto* newDisplay = new ServerURLDisplay(this, getPhysicalNetworkInterfaces(), 8080);
-		topLevelSizer->Replace(URLDisplay, newDisplay);
-		this->RemoveChild(URLDisplay);
+		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 8080);
+		assert(topLevelSizer->Replace(URLDisplay, newDisplay));
+		topLevelPanel->RemoveChild(URLDisplay);
 		URLDisplay->Destroy();
 		URLDisplay = newDisplay;
 		this->Layout();
@@ -52,10 +52,16 @@ TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
 		wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxCLOSE_BOX))
 {
+	topLevelPanel = new wxPanel(this);
+	auto* panelSizer = new wxBoxSizer(wxVERTICAL);
+	panelSizer->Add(topLevelPanel, wxSizerFlags(1).Expand());
+
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	this->SetSizer(topLevelSizer);
-	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(this, getPhysicalNetworkInterfaces(), 8080), wxSizerFlags(0).Expand());
-	topLevelSizer->Add(activityList = new ActivityList(this), wxSizerFlags(1).Expand());
+	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 8080), wxSizerFlags(0).Expand());
+	topLevelSizer->Add(activityList = new ActivityList(topLevelPanel), wxSizerFlags(1).Expand());
+	setSizerWithPadding(topLevelPanel, topLevelSizer);
+	topLevelPanel->Fit();
+	this->SetSizer(panelSizer);
 }
 
 TrayStatusWindow::WebpageOpenedActivityEntry* TrayStatusWindow::addWebpageOpenedActivity(const wxString& url)
@@ -281,6 +287,7 @@ void TrayStatusWindow::FileUploadActivityEntry::setError(const std::exception* e
 	}
 
 	openButton->Enable(false);
+	cancelButton->Enable(false);
 	fileUploadProgress->setErrorStyle();
 }
 

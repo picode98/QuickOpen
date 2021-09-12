@@ -11,6 +11,15 @@ T& getValidator(wxWindow* obj)
 const int DEFAULT_CONTROL_SPACING = 7;
 const wxColour ERROR_TEXT_COLOR = wxColour(0x0000a0);
 
+inline wxSizer* setSizerWithPadding(wxWindow* window, wxSizer* content, int paddingWidth = DEFAULT_CONTROL_SPACING)
+{
+	auto* paddingSizer = new wxBoxSizer(wxVERTICAL);
+	paddingSizer->Add(content, wxSizerFlags(1).Expand().Border(wxALL, paddingWidth));
+	window->SetSizer(paddingSizer);
+
+	return paddingSizer;
+}
+
 class ProgressBarWithText : public wxBoxSizer
 {
 	wxGauge* progressBar = nullptr;

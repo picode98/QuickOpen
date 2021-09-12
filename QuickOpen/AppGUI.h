@@ -187,10 +187,7 @@ public:
 	ConsentDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxString& requesterName) : wxDialog(parent, id, title, wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	{
-		wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
 		topLevelSizer = new wxBoxSizer(wxVERTICAL);
-		windowPaddingSizer->Add(topLevelSizer, wxSizerFlags(1).Expand().Border(wxALL, DEFAULT_CONTROL_SPACING));
-
 		topLevelSizer->Add(content = new wxWindow(this, wxID_ANY), wxSizerFlags(1).Expand());
 
 		topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
@@ -211,7 +208,8 @@ public:
 		acceptButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnAcceptClicked, this);
 		rejectButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnDeclineClicked, this);
 
-		this->SetSizerAndFit(windowPaddingSizer);
+		setSizerWithPadding(this, topLevelSizer);
+		this->Fit();
 	}
 
 	bool denyFutureRequestsRequested() const

@@ -114,9 +114,7 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
 	panelSizer->Add(topLevelPanel, wxSizerFlags(1).Expand());
 
-	wxBoxSizer* windowPaddingSizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	windowPaddingSizer->Add(topLevelSizer, wxSizerFlags(1).Expand().Border(wxALL, DEFAULT_CONTROL_SPACING));
 	// this->panel = new wxPanel(this);
 	// topLevelSizer->Add(panel, wxSizerFlags(1).Expand());
 
@@ -257,7 +255,8 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
 
 	this->TransferDataToWindow();
-	topLevelPanel->SetSizerAndFit(windowPaddingSizer);
+	setSizerWithPadding(topLevelPanel, topLevelSizer);
+	topLevelPanel->Fit();
 	this->SetSizerAndFit(panelSizer);
 	this->updateCustomBrowserHidden();
 	this->updateSaveFolderEnabledState();

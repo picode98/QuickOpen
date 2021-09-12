@@ -481,7 +481,7 @@ void OpenSaveFileAPIEndpoint::MGStoreBodyChecked(mg_connection* conn, const wxFi
 	catch (const std::ios_base::failure& ex)
 	{
 #ifdef WIN32
-		WindowsException detailedError = getWinAPIError(ERROR_SUCCESS);
+		WindowsException detailedError = getWinAPIError(GetLastError());
 #else
         const auto& detailedError = ex;
 #endif

@@ -112,6 +112,7 @@ public:
 		ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort);
 	};
 private:
+	wxPanel* topLevelPanel = nullptr;
 	wxBoxSizer* topLevelSizer = nullptr;
 	ServerURLDisplay* URLDisplay = nullptr;
 	ActivityList* activityList = nullptr;
