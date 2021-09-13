@@ -22,10 +22,10 @@ jobs:
                 $VCPKG_ROOT/vcpkg install wxwidgets:x64-windows nlohmann-json:x64-windows civetweb:x64-windows
               shell: bash
             - run: |
-                cmake . -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build .
+                cmake . -Ax64 -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build . --config Release
               shell: bash
             - name: Archive built executable
               uses: actions/upload-artifact@v2
               with:
                 name: QuickOpen.exe
-                path: cmake_build_release/QuickOpen.exe
+                path: QuickOpen/Release/QuickOpenExecutable.exe

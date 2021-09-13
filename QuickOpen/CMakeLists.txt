@@ -25,7 +25,7 @@ find_package(civetweb REQUIRED)
 target_link_libraries(QuickOpenExecutable PRIVATE civetweb::civetweb civetweb::civetweb-cpp)
 
 if(MSVC)
-	target_link_libraries(QuickOpenExecutable PRIVATE "bcrypt.lib")
+	target_link_libraries(QuickOpenExecutable PRIVATE "bcrypt.lib" "wbemuuid.lib")
 endif()
 
 set_property(TARGET QuickOpenExecutable PROPERTY CXX_STANDARD 17)
