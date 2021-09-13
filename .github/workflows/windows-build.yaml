@@ -19,7 +19,7 @@ jobs:
               with:
                 setupOnly: true
             - run: |
-                $VCPKG_ROOT/vcpkg install wxwidgets:windows-x64 nlohmann-json:windows-x64 civetweb:windows-x64
+                $VCPKG_ROOT/vcpkg install wxwidgets:x64-windows nlohmann-json:x64-windows civetweb:x64-windows
               shell: bash
             - run: |
                 cmake . -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build .
