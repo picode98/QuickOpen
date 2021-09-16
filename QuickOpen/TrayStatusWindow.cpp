@@ -26,7 +26,8 @@ void TrayStatusWindow::OnShow(wxShowEvent& event)
 	if (event.IsShown())
 	{
 		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 8080);
-		assert(topLevelSizer->Replace(URLDisplay, newDisplay));
+		bool replaced = topLevelSizer->Replace(URLDisplay, newDisplay);
+		assert(replaced);
 		topLevelPanel->RemoveChild(URLDisplay);
 		URLDisplay->Destroy();
 		URLDisplay = newDisplay;

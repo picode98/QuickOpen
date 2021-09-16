@@ -24,8 +24,12 @@ jobs:
             - run: |
                 cmake . -Ax64 -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build . --config Release
               shell: bash
+            - run: |
+                cp -r QuickOpen/static/ QuickOpen/Release/static/
+                cp QuickOpen/test_icon.ico QuickOpen/Release/
+              shell: bash
             - name: Archive built executable
               uses: actions/upload-artifact@v2
               with:
-                name: QuickOpen.exe
-                path: QuickOpen/Release/QuickOpenExecutable.exe
+                name: "QuickOpen Windows Binaries (x64)"
+                path: QuickOpen/Release/
