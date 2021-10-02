@@ -275,20 +275,29 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 	class TaskbarMenu : public wxMenu
 	{
 		WriterReadersLock<AppConfig>& configRef;
+        TrayStatusWindow* statusWindow = nullptr;
 		
 	public:
 		enum MenuItems
 		{
+            STATUS,
 			SETTINGS,
 			EXIT
 		};
 
-		TaskbarMenu(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
+		TaskbarMenu(WriterReadersLock<AppConfig>& configRef, TrayStatusWindow* statusWindow) : configRef(configRef),
+            statusWindow(statusWindow)
 		{
+            this->Append(STATUS, wxT("Open Status"));
 			this->Append(SETTINGS, wxT("Open Settings"));
 			this->AppendSeparator();
 			this->Append(EXIT, wxT("Exit QuickOpen"));
 		}
+
+        void OnStatusItemSelected(wxCommandEvent& event)
+        {
+            this->statusWindow->showAtCursor();
+        }
 
 		void OnSettingsItemSelected(wxCommandEvent& event)
 		{
@@ -305,7 +314,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 
 	wxMenu* CreatePopupMenu() override
 	{
-		return new TaskbarMenu(this->configRef);
+		return new TaskbarMenu(this->configRef, this->statusWindow);
 	}
 
 	//void focusTimerFunction(wxTimerEvent& timerEvent)
@@ -316,9 +325,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 
 	void OnIconClick(wxTaskBarIconEvent& event)
 	{
-		this->statusWindow->SetPosition(wxGetMousePosition() - this->statusWindow->GetSize());
-		this->statusWindow->Show();
-		activateWindow(this->statusWindow);
+        this->statusWindow->showAtCursor();
 		
 		//this->Bind(wxEVT_TIMER, &QuickOpenTaskbarIcon::focusTimerFunction, this);
 		//(new wxTimer(this))->StartOnce(1000);

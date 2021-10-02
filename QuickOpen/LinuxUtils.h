@@ -27,6 +27,30 @@ std::filesystem::path getAppExecutablePath();
 void shellExecuteFile(const wxFileName& filePath, const wxWindow* window = nullptr);
 void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile = nullptr);
 
+struct IPAddress
+{
+    enum IPAddressType
+    {
+        IPV4,
+        IPV6
+    };
+
+    IPAddressType type;
+    wxString addressStr;
+    bool isLinkLocal;
+};
+
+struct NetworkInterfaceInfo
+{
+#define NetworkInterfaceInfo_GUID_AVAILABLE false
+#define NetworkInterfaceInfo_DRIVER_NAME_AVAILABLE false
+
+    wxString interfaceName;
+    std::vector<IPAddress> IPAddresses;
+};
+
+std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces();
+
 struct WebBrowserInfo
 {
     std::string browserID, browserName,

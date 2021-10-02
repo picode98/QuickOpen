@@ -124,6 +124,13 @@ private:
 public:
 	TrayStatusWindow();
 
+    void showAtCursor()
+    {
+        this->SetPosition(wxGetMousePosition() - this->GetSize());
+        this->Show();
+        activateWindow(this);
+    }
+
 	WebpageOpenedActivityEntry* addWebpageOpenedActivity(const wxString& url);
 
 	FileUploadActivityEntry* addFileUploadActivity(const wxFileName& filename, std::atomic<bool>& cancelRequestFlag);

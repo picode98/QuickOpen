@@ -200,6 +200,21 @@ inline wxString substituteFormatString(const wxString& format, wxUniChar placeho
 	return resultStr;
 }
 
+template<typename ObjType, typename PrefixType>
+bool startsWith(const ObjType& obj, const PrefixType& prefix)
+{
+    auto objIter = obj.begin();
+    auto prefixIter = prefix.begin();
+
+    for (; objIter != obj.end() && prefixIter != prefix.end();
+           ++objIter, ++prefixIter)
+    {
+        if (*objIter != *prefixIter) return false;
+    }
+
+    return (prefixIter == prefix.end());
+}
+
 inline std::string MGReadAll(mg_connection* conn)
 {
 	std::stringstream strBuilder;

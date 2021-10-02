@@ -462,6 +462,7 @@ std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
 }
 
 wxBEGIN_EVENT_TABLE(QuickOpenTaskbarIcon::TaskbarMenu, wxMenu)
+    EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::STATUS, QuickOpenTaskbarIcon::TaskbarMenu::OnStatusItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::SETTINGS, QuickOpenTaskbarIcon::TaskbarMenu::OnSettingsItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::EXIT, QuickOpenTaskbarIcon::TaskbarMenu::OnExitItemSelected)
 wxEND_EVENT_TABLE()

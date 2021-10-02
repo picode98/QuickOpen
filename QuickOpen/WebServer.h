@@ -41,21 +41,6 @@ typedef uint32_t ConsentToken;
 class TrayStatusWindow;
 class QuickOpenApplication;
 
-template<typename ObjType, typename PrefixType>
-bool startsWith(const ObjType& obj, const PrefixType& prefix)
-{
-	auto objIter = obj.begin();
-	auto prefixIter = prefix.begin();
-	
-	for (; objIter != obj.end() && prefixIter != prefix.end();
-			++objIter, ++prefixIter)
-	{
-		if (*objIter != *prefixIter) return false;
-	}
-
-	return (prefixIter == prefix.end());
-}
-
 std::string URLDecode(const std::string& encodedStr, bool decodePlus);
 
 #ifdef _WIN32

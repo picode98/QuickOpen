@@ -369,22 +369,30 @@ TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std
 	{
 		if (!thisInterface.IPAddresses.empty())
 		{
-			auto* interfaceText = new wxStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(" (") << thisInterface.driverName << wxT("):"));
+#if NetworkInterfaceInfo_DRIVER_NAME_AVAILABLE
+            auto* interfaceText = new wxStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(" (") << thisInterface.driverName << wxT("):"));
+#else
+            auto* interfaceText = new wxStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(":"));
+#endif
+
 			interfaceText->SetFont(interfaceText->GetFont().Bold());
 			topLevelSizer->Add(
 				interfaceText,
 				wxSizerFlags(0).Expand()
 			);
 
-			for (const wxString& thisAddress : thisInterface.IPAddresses)
+			for (const IPAddress& thisAddress : thisInterface.IPAddresses)
 			{
-				wxString thisURL = wxString() << wxT("http://")
-					<< (thisAddress.Contains(wxT(":")) ? (wxT("[") + thisAddress + wxT("]")) : thisAddress) << wxT(":") << serverPort;
+                if(!thisAddress.isLinkLocal)
+                {
+                    wxString thisURL = wxString() << wxT("http://")
+                        << ((thisAddress.type == IPAddress::IPV6) ? (wxT("[") + thisAddress.addressStr + wxT("]")) : thisAddress.addressStr) << wxT(":") << serverPort;
 
-				topLevelSizer->Add(
-					new wxHyperlinkCtrl(this, wxID_ANY, thisURL, thisURL),
-					wxSizerFlags(0).Expand().Border(wxLEFT, this->FromDIP(10))
-				);
+                    topLevelSizer->Add(
+                        new wxHyperlinkCtrl(this, wxID_ANY, thisURL, thisURL),
+                        wxSizerFlags(0).Expand().Border(wxLEFT, this->FromDIP(10))
+                    );
+                }
 			}
 		}
 	}
