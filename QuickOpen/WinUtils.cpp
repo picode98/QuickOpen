@@ -324,6 +324,27 @@ inline wxString bStrToWXString(BSTR bStr)
 	return wxString(std::wstring(bStr, SysStringLen(bStr)));
 }
 
+IPAddress parseWMIIPAddress(const wxString& addressStr)
+{
+	size_t firstColonIndex = addressStr.find(wxT(":"));
+	if (firstColonIndex != wxString::npos)
+	{
+		unsigned long firstOctetVal;
+		addressStr.substr(0, firstColonIndex).ToULong(&firstOctetVal, 16);
+		return { IPAddress::IPV6, addressStr, ((firstOctetVal >> 6) << 6) == 0xfe80UL };
+	}
+	else
+	{
+		wxArrayString addrParts = wxSplit(addressStr, wxChar('.'), wxChar('\0'));
+		if(addrParts.size() != 4)
+		{
+			throw std::domain_error("Could not parse the given address.");
+		}
+
+		return { IPAddress::IPV4, addressStr, addrParts[0] == wxT("169") && addrParts[1] == wxT("254") };
+	}
+}
+
 std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
 {
 	std::vector<NetworkInterfaceInfo> resultList;
@@ -358,7 +379,7 @@ std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
 
 				if (addressesProp.parray != nullptr)
 				{
-					std::vector<wxString> addresses;
+					std::vector<IPAddress> addresses;
 
 					LONG i, upperBound;
 
@@ -370,7 +391,8 @@ std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
 						BSTR thisAddressObj;
 						// VariantInit(&thisAddressObj);
 						handleWinAPIError(SafeArrayGetElement(V_ARRAY(&addressesProp), &i, &thisAddressObj), false);
-						addresses.push_back(bStrToWXString(thisAddressObj));
+						wxString convertedAddr = bStrToWXString(thisAddressObj);
+						addresses.push_back(parseWMIIPAddress(convertedAddr));
 					}
 
 					resultList.push_back({ bStrToWXString(IDProp.bstrVal), bStrToWXString(interfaceIDs[IDProp.bstrVal]), bStrToWXString(driverNameProp.bstrVal), addresses });

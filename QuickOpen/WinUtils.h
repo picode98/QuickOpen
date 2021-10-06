@@ -119,10 +119,25 @@ public:
 
 WMIResultIterator runWMIQuery(const wxString& wmiNamespace, const wxString& query);
 
+struct IPAddress
+{
+	enum IPAddressType
+	{
+		IPV4,
+		IPV6
+	};
+
+	IPAddressType type;
+	wxString addressStr;
+	bool isLinkLocal;
+};
+
 struct NetworkInterfaceInfo
 {
+#define NetworkInterfaceInfo_GUID_AVAILABLE true
+#define NetworkInterfaceInfo_DRIVER_NAME_AVAILABLE true
 	wxString GUID, interfaceName, driverName;
-	std::vector<wxString> IPAddresses;
+	std::vector<IPAddress> IPAddresses;
 };
 
 std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces();
