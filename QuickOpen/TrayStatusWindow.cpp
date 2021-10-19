@@ -117,7 +117,8 @@ WebpageOpenedActivityEntry(wxWindow* parent, const wxString& url) : ActivityEntr
 
 	horizSizer->Add(entryText = new wxStaticText(parent, wxID_ANY,
 		wxString() << wxT("Opened the URL \"") << url << wxT("\"."),
-		wxDefaultPosition, wxDefaultSize), wxSizerFlags(1).CenterVertical());
+		wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE), wxSizerFlags(1).CenterVertical());
+	entryText->SetMinSize(wxSize(0, entryText->GetMinHeight()));
 	horizSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 	horizSizer->Add(copyURLButton = new wxButton(parent, wxID_ANY, wxT("Copy URL")));
 	this->Add(horizSizer, wxSizerFlags(1).Expand());
@@ -220,7 +221,8 @@ TrayStatusWindow::FileUploadActivityEntry::FileUploadActivityEntry(wxWindow* par
 		uploadProgress)
 {
 	// vertSizer = new wxBoxSizer(wxVERTICAL);
-	this->Add(entryText = new wxStaticText(parent, wxID_ANY, this->getEntryText()), wxSizerFlags(0).Expand());
+	this->Add(entryText = new wxStaticText(parent, wxID_ANY, this->getEntryText(), wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE), wxSizerFlags(0).Expand());
+	entryText->SetMinSize(wxSize(0, entryText->GetMinHeight()));
 	this->AddSpacer(DEFAULT_CONTROL_SPACING);
 	this->Add(fileUploadProgress = new ProgressBarWithText(parent), wxSizerFlags(0).Expand());
 	this->AddSpacer(DEFAULT_CONTROL_SPACING);
@@ -298,7 +300,7 @@ void TrayStatusWindow::FileUploadActivityEntry::setCancelCompleted()
 	this->cancelButton->SetLabel(wxT("Cancel"));
 }
 
-TrayStatusWindow::ActivityList::ActivityList(wxWindow* parent) : wxScrolledWindow(parent)
+TrayStatusWindow::ActivityList::ActivityList(wxWindow* parent) : wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL)
 {
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -356,11 +358,15 @@ void TrayStatusWindow::ActivityList::removeActivity(ActivityEntry* entry)
 	}
 }
 
+//wxBEGIN_EVENT_TABLE(TrayStatusWindow::ActivityList, wxScrolledWindow)
+//	EVT_SIZE(TrayStatusWindow::ActivityList::OnSize)
+//wxEND_EVENT_TABLE()
+
 TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort):
 	wxWindow(parent, wxID_ANY)
 {
 	auto* topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	headerText = new wxStaticText(this, wxID_ANY, interfaces.empty() ?
+	headerText = new AutoWrappingStaticText(this, wxID_ANY, interfaces.empty() ?
 		wxT("No active LAN connections detected. Connect to a LAN to open content on this computer.") :
 		wxT("To open content on this computer, share the following links with others on your network:"));
 	topLevelSizer->Add(headerText, wxSizerFlags(0).Expand());
@@ -370,9 +376,9 @@ TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std
 		if (!thisInterface.IPAddresses.empty())
 		{
 #if NetworkInterfaceInfo_DRIVER_NAME_AVAILABLE
-            auto* interfaceText = new wxStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(" (") << thisInterface.driverName << wxT("):"));
+            auto* interfaceText = new AutoWrappingStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(" (") << thisInterface.driverName << wxT("):"));
 #else
-            auto* interfaceText = new wxStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(":"));
+            auto* interfaceText = new AutoWrappingStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(":"));
 #endif
 
 			interfaceText->SetFont(interfaceText->GetFont().Bold());

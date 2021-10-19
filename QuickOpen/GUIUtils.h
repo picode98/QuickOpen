@@ -40,3 +40,38 @@ public:
 
 	void setErrorStyle();
 };
+
+class AutoWrappingStaticText : public wxStaticText
+{
+	wxString unwrappedLabel;
+	bool wrappingInProgress = false;
+
+	void OnSize(wxSizeEvent& event);
+
+public:
+	AutoWrappingStaticText(wxWindow *parent,
+		wxWindowID id,
+		const wxString& label,
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = 0,
+		const wxString& name = wxASCII_STR(wxStaticTextNameStr)) : wxStaticText(parent, id, label, pos, size, style, name),
+			unwrappedLabel(label)
+	{
+		this->Wrap(this->GetClientSize().GetWidth());
+	}
+
+	void setUnwrappedLabel(const wxString& newLabel)
+	{
+		this->unwrappedLabel = newLabel;
+		this->SetLabel(newLabel);
+		this->Wrap(this->GetClientSize().GetWidth());
+	}
+
+	wxString getUnwrappedLabel() const
+	{
+		return this->unwrappedLabel;
+	}
+
+	DECLARE_EVENT_TABLE()
+};

@@ -39,3 +39,21 @@ void ProgressBarWithText::setErrorStyle()
 	// this->progressBar->SetForegroundColour(ERROR_TEXT_COLOR);
 	this->progressText->SetForegroundColour(ERROR_TEXT_COLOR);
 }
+
+void AutoWrappingStaticText::OnSize(wxSizeEvent& event)
+{
+	if (!this->wrappingInProgress)
+	{
+		this->wrappingInProgress = true;
+		this->SetLabel(this->unwrappedLabel);
+		this->Wrap(event.GetSize().GetWidth());
+		auto size = event.GetSize();
+		this->wrappingInProgress = false;
+	}
+
+	event.Skip();
+}
+
+BEGIN_EVENT_TABLE(AutoWrappingStaticText, wxStaticText)
+	EVT_SIZE(AutoWrappingStaticText::OnSize)
+END_EVENT_TABLE()

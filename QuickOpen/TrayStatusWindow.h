@@ -95,6 +95,12 @@ public:
 		//	this->Refresh();
 		//}
 
+		//void OnSize(wxSizeEvent& event)
+		//{
+		//	this->SetVirtualSize(1500, this->GetVirtualSize().GetHeight());
+		//	event.Skip();
+		//}
+
 	public:
 		ActivityList(wxWindow* parent);
 
@@ -107,7 +113,7 @@ public:
 
 	class ServerURLDisplay : public wxWindow
 	{
-		wxStaticText* headerText = nullptr;
+		AutoWrappingStaticText* headerText = nullptr;
 	public:
 		ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort);
 	};

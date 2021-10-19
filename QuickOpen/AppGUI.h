@@ -410,6 +410,7 @@ inline bool promptForWebpageOpen(QuickOpenApplication& app, std::string URL, con
 {
     auto messageBoxLambda = [URL, &requesterName, &banRequested]{
 		auto dialog = WebpageOpenConsentDialog(URL, requesterName);
+		dialog.RequestUserAttention();
 		auto result = static_cast<ConsentDialog::ResultCode>(dialog.ShowModal());
 		banRequested = dialog.denyFutureRequestsRequested();
 		return result;
