@@ -10,7 +10,7 @@ cmake_minimum_required (VERSION 3.8)
 #      CACHE STRING "")
 # endif()
 
-project ("QuickOpen")
+project ("QuickOpen" VERSION 0.1.0.0)
 
 # Include sub-projects.
 add_subdirectory ("QuickOpen")

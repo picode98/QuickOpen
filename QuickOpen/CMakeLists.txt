@@ -4,6 +4,7 @@
 cmake_minimum_required (VERSION 3.8)
 
 project ("QuickOpen")
+add_compile_definitions(APP_VERSION="${CMAKE_PROJECT_VERSION}")
 
 # Add source to this project's executable.
 # add_executable (QuickOpen "QuickOpen.cpp" "QuickOpen.h")

@@ -20,6 +20,7 @@
 #include <wx/richtooltip.h>
 #include <wx/clipbrd.h>
 #include <wx/statline.h>
+#include <wx/aboutdlg.h>
 //#include <wx/gauge.h>
 // #include <wx/scrolwin.h>
 
@@ -282,6 +283,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 		{
             STATUS,
 			SETTINGS,
+            ABOUT,
 			EXIT
 		};
 
@@ -290,6 +292,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 		{
             this->Append(STATUS, wxT("Open Status"));
 			this->Append(SETTINGS, wxT("Open Settings"));
+            this->Append(ABOUT, wxT("About QuickOpen"));
 			this->AppendSeparator();
 			this->Append(EXIT, wxT("Exit QuickOpen"));
 		}
@@ -303,6 +306,16 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 		{
 			(new QuickOpenSettings(this->configRef))->Show();
 		}
+
+        void OnAboutItemSelected(wxCommandEvent& event)
+        {
+            wxAboutDialogInfo aboutDialogInfo;
+            aboutDialogInfo.AddDeveloper(wxT("Saaman Khalilollahi (picode98)"));
+            aboutDialogInfo.SetVersion(wxString(wxT("Version ")) + wxT(APP_VERSION));
+            aboutDialogInfo.SetIcon(wxIcon(wxT("test_icon.ico"), wxBITMAP_TYPE_ICO));
+
+            wxAboutBox(aboutDialogInfo);
+        }
 
 		void OnExitItemSelected(wxCommandEvent& event)
 		{
@@ -355,6 +368,9 @@ class QuickOpenApplication : public wxApp
 public:
 	bool OnInit() override
 	{
+        this->SetAppName(wxT("QuickOpen"));
+        this->SetAppDisplayName(wxT("QuickOpen"));
+
 		std::unique_ptr<AppConfig> config = std::make_unique<AppConfig>();
 
 		try

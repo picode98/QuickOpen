@@ -85,7 +85,8 @@ bool isLinkLocal(in6_addr address)
 
 bool isLinkLocal(in_addr address)
 {
-    return (address.s_addr >> 16) == (169 << 8) + 254;
+    auto* byteView = reinterpret_cast<uint8_t*>(&(address.s_addr));
+    return byteView[0] == static_cast<uint8_t>(169) && byteView[1] == static_cast<uint8_t>(254);
 }
 
 IPAddress getSockaddrInfo(sockaddr* address, const wxString& interfaceName)
