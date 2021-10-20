@@ -11,9 +11,9 @@ cmake_minimum_required (VERSION 3.9)
 # endif()
 
 file(STRINGS "QuickOpen/ApplicationInfo.h" lineList)
-foreach(thisLine lineList)
+foreach(thisLine ${lineList})
     if(thisLine MATCHES "^#define QUICKOPEN_VERSION_STR \"(.*)\"$")
-        set(headerVersion CMAKE_MATCH_1)
+        set(headerVersion ${CMAKE_MATCH_1})
     endif()
 endforeach()
 
