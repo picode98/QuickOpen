@@ -14,6 +14,15 @@
 
 #include <nlohmann/json.hpp>
 
+inline std::map<wxString, wxString> getDependencyVersions()
+{
+	return {
+		{ wxT("wxWidgets"), wxVERSION_NUM_DOT_STRING_T },
+		{ wxT("nlohmann::json"), wxMAKE_VERSION_DOT_STRING_T(NLOHMANN_JSON_VERSION_MAJOR, NLOHMANN_JSON_VERSION_MINOR, NLOHMANN_JSON_VERSION_PATCH) },
+		{ wxT("CivetWeb"), wxT(CIVETWEB_VERSION) }
+	};
+}
+
 namespace nlohmann
 {
 	template<>

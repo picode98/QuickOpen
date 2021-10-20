@@ -36,6 +36,7 @@
 #include <CivetServer.h>
 #include <wx/url.h>
 
+#include "ApplicationInfo.h"
 #include "PlatformUtils.h"
 
 template<typename T>
@@ -309,10 +310,38 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 
         void OnAboutItemSelected(wxCommandEvent& event)
         {
+			wxString depStr = wxT("with additional credit to developers of the following dependencies:\n");
+
+			auto depVersions = getDependencyVersions();
+			for(auto item = depVersions.begin(); item != depVersions.end(); ++item)
+			{
+				auto nextItem = std::next(item);
+
+				depStr += item->first + wxT(" (version ") + item->second + wxT(")");
+				
+				if(nextItem != depVersions.end())
+				{
+					if (std::next(nextItem) == depVersions.end())
+					{
+						depStr += wxT(", and ");
+					}
+					else
+					{
+						depStr += wxT(", ");
+					}
+				}
+			}
+
             wxAboutDialogInfo aboutDialogInfo;
-            aboutDialogInfo.AddDeveloper(wxT("Saaman Khalilollahi (picode98)"));
-            aboutDialogInfo.SetVersion(wxString(wxT("Version ")) + wxT(APP_VERSION));
+            aboutDialogInfo.AddDeveloper(wxT(QUICKOPEN_DEVELOPER));
+			aboutDialogInfo.AddDeveloper(depStr);
+			// aboutDialogInfo.AddDeveloper(wxT(""))
+            aboutDialogInfo.SetVersion(wxString(wxT("Version ")) + wxT(QUICKOPEN_VERSION_STR));
+			aboutDialogInfo.SetDescription(wxT(QUICKOPEN_SHORT_DESC));
+			aboutDialogInfo.SetCopyright(wxT(QUICKOPEN_LICENSE));
+			aboutDialogInfo.SetWebSite(wxT(QUICKOPEN_REPO_URL));
             aboutDialogInfo.SetIcon(wxIcon(wxT("test_icon.ico"), wxBITMAP_TYPE_ICO));
+			// aboutDialogInfo.GetDescriptionAndCredits()
 
             wxAboutBox(aboutDialogInfo);
         }

@@ -151,13 +151,18 @@
   <ItemGroup>
     <ClInclude Include="AppConfig.h" />
     <ClInclude Include="AppGUI.h" />
+    <ClInclude Include="ApplicationInfo.h" />
     <ClInclude Include="GUIUtils.h" />
     <ClInclude Include="LinuxUtils.h" />
     <ClInclude Include="PlatformUtils.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="TrayStatusWindow.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="WebServer.h" />
     <ClInclude Include="WinUtils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="QuickOpen.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
