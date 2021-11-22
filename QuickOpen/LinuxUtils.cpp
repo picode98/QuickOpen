@@ -22,7 +22,7 @@ void handleLinuxSystemError(bool errCond)
     }
 }
 
-std::filesystem::path getAppExecutablePath()
+wxFileName getAppExecutablePath()
 {
     char procNameBuf[PATH_MAX] = {};
     handleLinuxSystemError(readlink("/proc/self/exe", procNameBuf, PATH_MAX) == -1);
@@ -156,6 +156,8 @@ std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
             }
         }
     }
+
+    freeifaddrs(addrList);
 
     std::vector<NetworkInterfaceInfo> resultVector;
     for(const auto& [_, value] : resultMap)

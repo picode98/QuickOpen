@@ -4,7 +4,7 @@
 cmake_minimum_required (VERSION 3.8)
 
 project ("QuickOpen")
-add_compile_definitions(APP_VERSION="${CMAKE_PROJECT_VERSION}")
+# add_compile_definitions(APP_VERSION="${CMAKE_PROJECT_VERSION}")
 
 # Add source to this project's executable.
 # add_executable (QuickOpen "QuickOpen.cpp" "QuickOpen.h")
@@ -33,15 +33,20 @@ endif()
 
 set_property(TARGET QuickOpenExecutable PROPERTY CXX_STANDARD 17)
 
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.21")
-	add_custom_command(TARGET QuickOpenExecutable POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E echo Will add $<TARGET_RUNTIME_DLLS:QuickOpenExecutable> to output directory
-		COMMAND_EXPAND_LISTS)
-	add_custom_command(TARGET QuickOpenExecutable POST_BUILD
-	  COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:QuickOpenExecutable> $<TARGET_FILE_DIR:QuickOpenExecutable>
-	  COMMAND_EXPAND_LISTS
-	)
-endif()
+#if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.21")
+#	add_custom_command(TARGET QuickOpenExecutable POST_BUILD
+#		COMMAND ${CMAKE_COMMAND} -E echo Will add $<TARGET_RUNTIME_DLLS:QuickOpenExecutable> to output directory
+#		COMMAND_EXPAND_LISTS)
+#	add_custom_command(TARGET QuickOpenExecutable POST_BUILD
+#	  COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:QuickOpenExecutable> $<TARGET_FILE_DIR:QuickOpenExecutable>
+#	  COMMAND_EXPAND_LISTS
+#	)
+#endif()
+
+install(TARGETS QuickOpenExecutable RUNTIME DESTINATION bin)
+install(FILES ./test_icon.ico DESTINATION share/QuickOpen)
+install(DIRECTORY ./static DESTINATION share/QuickOpen)
+
 
 #add_custom_command(TARGET QuickOpen POST_BUILD
 

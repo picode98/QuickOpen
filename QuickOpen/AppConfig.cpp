@@ -2,7 +2,7 @@
 
 using namespace SettingRetrieval;
 
-const std::filesystem::path AppConfig::DEFAULT_CONFIG_PATH = getAppExecutablePath().replace_filename("config.json");
+const wxFileName AppConfig::DEFAULT_CONFIG_PATH = InstallationInfo::detectInstallation().configFolder / wxFileName(wxT("."), wxT("config.json"));
 
 namespace SettingRetrieval
 {
@@ -38,7 +38,7 @@ bool getSettingWarn(const nlohmann::json& config, const std::string& key, wxFile
 	return successVal;
 }
 
-void AppConfig::saveConfig(const std::filesystem::path& filePath)
+void AppConfig::saveConfig(const wxFileName& filePath)
 {
 	nlohmann::json jsonConfig = {
 		{"runAtStartup", runAtStartup},
@@ -58,7 +58,7 @@ void AppConfig::saveConfig(const std::filesystem::path& filePath)
 
 	std::ofstream fileOutput;
 	fileOutput.exceptions(std::ofstream::failbit);
-	fileOutput.open(filePath);
+	fileOutput.open(filePath.GetFullPath());
 	fileOutput << jsonConfig;
 
 	//wxFileConfig config;
@@ -68,13 +68,13 @@ void AppConfig::saveConfig(const std::filesystem::path& filePath)
 	//config.Save(fileOutput);
 }
 
-AppConfig AppConfig::loadConfig(const std::filesystem::path& filePath)
+AppConfig AppConfig::loadConfig(const wxFileName& filePath)
 {
 	nlohmann::json jsonConfig;
 
 	std::ifstream fileInput;
 	fileInput.exceptions(std::ifstream::failbit);
-	fileInput.open(filePath);
+	fileInput.open(filePath.GetFullPath());
 	fileInput >> jsonConfig;
 
 	AppConfig newConfig;

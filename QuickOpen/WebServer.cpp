@@ -136,7 +136,7 @@ void sendJSONResponse(mg_connection* conn, int status, const nlohmann::json& jso
 bool StaticHandler::handleGet(CivetServer* server, mg_connection* conn)
 {
 	const mg_request_info* rqInfo = mg_get_request_info(conn);
-	std::string_view rqURI(rqInfo->request_uri);
+	std::string rqURI(rqInfo->request_uri);
 
 	if (rqURI.find("..") != std::string::npos)
 	{
@@ -146,23 +146,21 @@ bool StaticHandler::handleGet(CivetServer* server, mg_connection* conn)
 
 	if (startsWith(rqURI, this->staticPrefix))
 	{
-		std::string_view truncPath = rqURI;
-		truncPath.remove_prefix(this->staticPrefix.size());
+		wxFileName resolvedPath = this->baseStaticPath / wxFileName(wxString::FromUTF8(rqURI.substr(this->staticPrefix.size())), wxPATH_UNIX);
 
-		std::filesystem::path resolvedPath = (STATIC_PATH / truncPath).lexically_normal();
-		if (!resolvedPath.has_extension())
+		if (!resolvedPath.HasExt())
 		{
-			if (!resolvedPath.has_filename())
+			if (!resolvedPath.HasName())
 			{
-				resolvedPath.replace_filename("index.html");
+				resolvedPath.SetName("index.html");
 			}
 			else
 			{
-				resolvedPath.replace_extension("html");
+				resolvedPath.SetName("html");
 			}
 		}
 
-		mg_send_mime_file(conn, resolvedPath.generic_string().c_str(), nullptr);
+		mg_send_mime_file(conn, resolvedPath.GetFullPath().c_str(), nullptr);
 	}
 	else
 	{

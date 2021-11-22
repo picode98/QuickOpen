@@ -34,8 +34,8 @@ namespace SettingRetrieval
 struct AppConfig
 {
 	// static const std::map<ConfigKey, wxString> CONFIG_KEY_NAMES;
-	
-	static const std::filesystem::path DEFAULT_CONFIG_PATH;
+
+	static const wxFileName DEFAULT_CONFIG_PATH;
 	bool runAtStartup = false;
 
 	wxString browserID;
@@ -46,9 +46,9 @@ struct AppConfig
 
 	long maxSaveFileSize = 1 << 20;
 
-	void saveConfig(const std::filesystem::path& filePath = DEFAULT_CONFIG_PATH);
+	void saveConfig(const wxFileName& filePath = DEFAULT_CONFIG_PATH);
 
-	static AppConfig loadConfig(const std::filesystem::path& filePath = DEFAULT_CONFIG_PATH);
+	static AppConfig loadConfig(const wxFileName& filePath = DEFAULT_CONFIG_PATH);
 };
 
 // const std::map<AppConfig::ConfigKey, wxString> AppConfig::CONFIG_KEY_NAMES = { { RUN_AT_STARTUP, wxT("runAtStartup") } };

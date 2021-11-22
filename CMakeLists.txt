@@ -2,6 +2,9 @@
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.9)
+set(CPACK_BINARY_DEB "ON")
+set(CPACK_PACKAGE_CONTACT "Saaman Khalilollahi (picode98)")
+set(CPACK_PACKAGE_DIRECTORY /home/sdk/QuickOpen/release/pkg)
 
 # set(wxWidgets_ROOT_DIR ${VCPKG_ROOT}/installed/x64-windows)
 
@@ -14,6 +17,8 @@ file(STRINGS "QuickOpen/ApplicationInfo.h" lineList)
 foreach(thisLine ${lineList})
     if(thisLine MATCHES "^#define QUICKOPEN_VERSION_STR \"(.*)\"$")
         set(headerVersion ${CMAKE_MATCH_1})
+    elseif(thisLine MATCHES "^#define QUICKOPEN_SHORT_DESC \"(.*)\"$")
+        set(headerShortDesc ${CMAKE_MATCH_1})
     endif()
 endforeach()
 
@@ -25,5 +30,13 @@ else()
     message(WARNING "Could not identify project version from header file.")
 endif()
 
+if(DEFINED headerShortDesc)
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${headerShortDesc}")
+else()
+    message(WARNING "Could not find package summary in header file.")
+endif()
+
 # Include sub-projects.
 add_subdirectory ("QuickOpen")
+
+include(CPack)

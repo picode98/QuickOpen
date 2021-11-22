@@ -11,6 +11,8 @@
 #include <fstream>
 #include <filesystem>
 
+#include "Utils.h"
+
 class LinuxException : public std::system_error
 {
 public:
@@ -23,7 +25,7 @@ void handleLinuxSystemError(bool errCond);
 // void startSubprocess(const wxString& executable, const std::vector<wxString>& args);
 void startSubprocess(const wxString& commandLine);
 
-std::filesystem::path getAppExecutablePath();
+wxFileName getAppExecutablePath();
 void shellExecuteFile(const wxFileName& filePath, const wxWindow* window = nullptr);
 void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile = nullptr);
 
@@ -88,5 +90,40 @@ T generateCryptoRandomInteger()
     urandomInput.close();
     return *reinterpret_cast<T*>(inputBytes);
 }
+
+struct InstallationInfo
+{
+    enum InstallationType
+    {
+        NOT_INSTALLED,
+        INSTALLED_PACKAGE
+    };
+
+    InstallationType installType;
+
+    wxFileName binaryFolder,
+        configFolder,
+        staticFolder;
+
+    static InstallationInfo detectInstallation()
+    {
+        wxFileName thisFolder = getAppExecutablePath();
+        thisFolder.SetName("");
+
+        wxString staticEnvVar;
+        bool staticEnvVarSet = wxGetEnv(wxT("QUICKOPEN_STATIC_DIR"), &staticEnvVar);
+
+        if(thisFolder.GetDirs().Last() == wxT("bin"))
+        {
+            return { INSTALLED_PACKAGE, thisFolder, thisFolder / wxFileName("../etc/QuickOpen", ""),
+                     staticEnvVarSet ? wxFileName(staticEnvVar, "") : (thisFolder / wxFileName("../share/QuickOpen/static", "")) };
+        }
+        else
+        {
+            return { NOT_INSTALLED, thisFolder, thisFolder,
+                     staticEnvVarSet ? wxFileName(staticEnvVar, "") : (thisFolder / wxFileName("static", "")) };
+        }
+    }
+};
 
 #endif //QUICKOPEN_LINUXUTILS_H

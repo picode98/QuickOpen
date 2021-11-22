@@ -408,7 +408,7 @@ public:
 		}
 		catch (const std::ios_base::failure&)
 		{
-			std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::DEFAULT_CONFIG_PATH << "\"." << std::endl;
+			std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::DEFAULT_CONFIG_PATH.GetFullPath() << "\"." << std::endl;
 		}
 
 		configRef = std::make_shared<WriterReadersLock<AppConfig>>(config);
@@ -443,6 +443,8 @@ public:
 		if (this->icon != nullptr)
 		{
 			this->icon->RemoveIcon();
+            this->icon->Destroy();
+            this->icon = nullptr;
 		}
 
 		mg_exit_library();

@@ -136,6 +136,13 @@ inline long strtol(const wxString& str)
 	return intVal;
 }
 
+inline wxFileName operator/(const wxFileName& lhs, const wxFileName& rhs)
+{
+    wxFileName result(rhs);
+    result.Normalize(wxPATH_NORM_ALL, lhs.GetPath());
+    return result;
+}
+
 inline wxString getPlaceholderValue(const std::vector<wxString>& args, const std::map<wxString, wxString>& kwArgs, const wxString& placeholderStr, bool KWPlaceholder)
 {
 	if (KWPlaceholder)
