@@ -4,7 +4,7 @@
 cmake_minimum_required (VERSION 3.8)
 
 project ("QuickOpen")
-# add_compile_definitions(APP_VERSION="${CMAKE_PROJECT_VERSION}")
+add_compile_definitions(QUICKOPEN_WINDOWS_PRODUCT_GUID="${thisBuildUUID}")
 
 # Add source to this project's executable.
 # add_executable (QuickOpen "QuickOpen.cpp" "QuickOpen.h")
@@ -44,6 +44,9 @@ set_property(TARGET QuickOpenExecutable PROPERTY CXX_STANDARD 17)
 #endif()
 
 install(TARGETS QuickOpenExecutable RUNTIME DESTINATION bin)
+if(MSVC)
+    install(DIRECTORY "${QuickOpen_BINARY_DIR}/$<CONFIG>/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+endif()
 install(FILES ./test_icon.ico DESTINATION share/QuickOpen)
 install(DIRECTORY ./static DESTINATION share/QuickOpen)
 

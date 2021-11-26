@@ -2,8 +2,6 @@
 
 using namespace SettingRetrieval;
 
-const wxFileName AppConfig::DEFAULT_CONFIG_PATH = InstallationInfo::detectInstallation().configFolder / wxFileName(wxT("."), wxT("config.json"));
-
 namespace SettingRetrieval
 {
     template<>
@@ -40,6 +38,8 @@ bool getSettingWarn(const nlohmann::json& config, const std::string& key, wxFile
 
 void AppConfig::saveConfig(const wxFileName& filePath)
 {
+	const wxFileName& effectiveFilePath = (filePath != wxFileName()) ? filePath : defaultConfigPath();
+
 	nlohmann::json jsonConfig = {
 		{"runAtStartup", runAtStartup},
 		{
@@ -56,9 +56,19 @@ void AppConfig::saveConfig(const wxFileName& filePath)
 		}
 	};
 
+	wxFileName dirName = getDirName(effectiveFilePath);
+	if(!dirName.DirExists() && !dirName.Mkdir())
+	{
+		throw std::exception("The configuration folder does not exist and could not be created.");
+	}
+
 	std::ofstream fileOutput;
 	fileOutput.exceptions(std::ofstream::failbit);
-	fileOutput.open(filePath.GetFullPath());
+#ifdef WIN32
+	fileOutput.open(wxStringToTString(effectiveFilePath.GetFullPath()));
+#else
+	fileOutput.open(effectiveFilePath.GetFullPath());
+#endif
 	fileOutput << jsonConfig;
 
 	//wxFileConfig config;
@@ -70,11 +80,16 @@ void AppConfig::saveConfig(const wxFileName& filePath)
 
 AppConfig AppConfig::loadConfig(const wxFileName& filePath)
 {
+	const wxFileName& effectiveFilePath = (filePath != wxFileName()) ? filePath : defaultConfigPath();
 	nlohmann::json jsonConfig;
 
 	std::ifstream fileInput;
 	fileInput.exceptions(std::ifstream::failbit);
-	fileInput.open(filePath.GetFullPath());
+#ifdef WIN32
+	fileInput.open(wxStringToTString(effectiveFilePath.GetFullPath()));
+#else
+	fileInput.open(effectiveFilePath.GetFullPath());
+#endif
 	fileInput >> jsonConfig;
 
 	AppConfig newConfig;

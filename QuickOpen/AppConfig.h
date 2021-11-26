@@ -35,7 +35,6 @@ struct AppConfig
 {
 	// static const std::map<ConfigKey, wxString> CONFIG_KEY_NAMES;
 
-	static const wxFileName DEFAULT_CONFIG_PATH;
 	bool runAtStartup = false;
 
 	wxString browserID;
@@ -46,9 +45,14 @@ struct AppConfig
 
 	long maxSaveFileSize = 1 << 20;
 
-	void saveConfig(const wxFileName& filePath = DEFAULT_CONFIG_PATH);
+	static inline wxFileName defaultConfigPath()
+	{
+		return InstallationInfo::detectInstallation().configFolder / wxFileName(wxT("."), wxT("config.json"));
+	}
 
-	static AppConfig loadConfig(const wxFileName& filePath = DEFAULT_CONFIG_PATH);
+	void saveConfig(const wxFileName& filePath = wxFileName());
+
+	static AppConfig loadConfig(const wxFileName& filePath = wxFileName());
 };
 
 // const std::map<AppConfig::ConfigKey, wxString> AppConfig::CONFIG_KEY_NAMES = { { RUN_AT_STARTUP, wxT("runAtStartup") } };

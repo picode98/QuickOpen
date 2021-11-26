@@ -108,6 +108,11 @@ ResultType wxCallAfterSync(AppType& app, FuncType func)
 	return resultVal.value();
 }
 
+inline wxFileName getAppIconPath()
+{
+	return InstallationInfo::detectInstallation().dataFolder / wxFileName(".", "test_icon.ico");
+}
+
 class QuickOpenSettings : public wxFrame
 {
 	// wxPanel* panel;
@@ -340,7 +345,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 			aboutDialogInfo.SetDescription(wxT(QUICKOPEN_SHORT_DESC));
 			aboutDialogInfo.SetCopyright(wxT(QUICKOPEN_LICENSE));
 			aboutDialogInfo.SetWebSite(wxT(QUICKOPEN_REPO_URL));
-            aboutDialogInfo.SetIcon(wxIcon(wxT("test_icon.ico"), wxBITMAP_TYPE_ICO));
+            aboutDialogInfo.SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
 			// aboutDialogInfo.GetDescriptionAndCredits()
 
             wxAboutBox(aboutDialogInfo);
@@ -376,7 +381,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 public:
 	QuickOpenTaskbarIcon(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
 	{
-		this->SetIcon(wxIcon(wxT("test_icon.ico"), wxBITMAP_TYPE_ICO), wxT("QuickOpen"));
+		this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO), wxT("QuickOpen"));
 		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
 
 		this->statusWindow = new TrayStatusWindow();
@@ -408,7 +413,7 @@ public:
 		}
 		catch (const std::ios_base::failure&)
 		{
-			std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::DEFAULT_CONFIG_PATH.GetFullPath() << "\"." << std::endl;
+			std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::defaultConfigPath().GetFullPath() << "\"." << std::endl;
 		}
 
 		configRef = std::make_shared<WriterReadersLock<AppConfig>>(config);

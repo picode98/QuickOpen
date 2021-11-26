@@ -1,4 +1,8 @@
 #include "WinUtils.h"
+#include "Utils.h"
+#include "ApplicationInfo.h"
+
+#include <wx/stdpaths.h>
 
 #include <map>
 
@@ -208,7 +212,7 @@ tstring getDefaultBrowserCommandLine()
 	return browserPath;
 }
 
-std::filesystem::path getAppExecutablePath()
+wxFileName getAppExecutablePath()
 {
 	static const DWORD START_BUF_SIZE = MAX_PATH;
 	DWORD currentBufSize = START_BUF_SIZE;
@@ -222,7 +226,7 @@ std::filesystem::path getAppExecutablePath()
 			GetModuleFileName(nullptr, filenameBuf, currentBufSize);
 			handleWinAPIError(ERROR_SUCCESS);
 
-			auto result = std::filesystem::path(filenameBuf);
+			auto result = wxFileName(filenameBuf);
 			delete[] filenameBuf;
 			return result;
 		}
@@ -404,4 +408,42 @@ std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
 	}
 
 	return resultList;
+}
+
+InstallationInfo InstallationInfo::detectInstallation()
+{
+	wxFileName appExePath = getAppExecutablePath();
+	appExePath.SetName("");
+
+	wxString staticEnvVar;
+	bool staticEnvVarSet = wxGetEnv(wxT("QUICKOPEN_DATA_DIR"), &staticEnvVar);
+
+	try
+	{
+		tstring installPathStr = readRegistryStringValue(HKEY_LOCAL_MACHINE, 
+			tstring(TEXT("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{")) + TEXT(QUICKOPEN_WINDOWS_PRODUCT_GUID) + TEXT("}"), TEXT("InstallLocation"));
+		auto installPath = wxFileName(installPathStr, "");
+		if(startsWith(appExePath.GetDirs(), installPath.GetDirs()))
+		{
+			return { INSTALLED_SYSTEM, appExePath, wxFileName(wxStandardPaths::Get().GetUserConfigDir(), "") / wxFileName("QuickOpen", ""),
+				staticEnvVarSet ? wxFileName(staticEnvVar, "") : (installPath / wxFileName("share/QuickOpen", "")) };
+		}
+		else
+		{
+			return { NOT_INSTALLED, appExePath, appExePath,
+				staticEnvVarSet ? wxFileName(staticEnvVar, "") : (appExePath / wxFileName("../share/QuickOpen", "")) };
+		}
+	}
+	catch (const WindowsException& ex)
+	{
+		if(ex.code().value() == ERROR_FILE_NOT_FOUND)
+		{
+			return { NOT_INSTALLED, appExePath, appExePath,
+				staticEnvVarSet ? wxFileName(staticEnvVar, "") : (appExePath / wxFileName("../share/QuickOpen", "")) };
+		}
+		else
+		{
+			throw;
+		}
+	}
 }

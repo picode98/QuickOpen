@@ -98,7 +98,7 @@ private:
 	const std::string staticPrefix;
     const wxFileName baseStaticPath;
 public:
-	StaticHandler(const std::string& staticPrefix) : staticPrefix(staticPrefix), baseStaticPath(InstallationInfo::detectInstallation().staticFolder)
+	StaticHandler(const std::string& staticPrefix) : staticPrefix(staticPrefix), baseStaticPath(InstallationInfo::detectInstallation().dataFolder / wxFileName("static", ""))
 	{}
 
 	bool handleGet(CivetServer* server, mg_connection* conn) override;

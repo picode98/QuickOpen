@@ -156,7 +156,7 @@ inline wxString getBrowserCommandLine(const wxString& browserID)
 	return wxString(readRegistryStringValue(HKEY_LOCAL_MACHINE, TEXT("SOFTWARE\\Clients\\StartMenuInternet\\") + wxStringToTString(browserID) + TEXT("\\shell\\open\\command"), TEXT("")));
 }
 
-std::filesystem::path getAppExecutablePath();
+wxFileName getAppExecutablePath();
 
 template<typename T>
 T generateCryptoRandomInteger()
@@ -178,3 +178,21 @@ inline void activateWindow(wxWindow* window)
 {
     SetForegroundWindow(window->GetHandle());
 }
+
+struct InstallationInfo
+{
+	enum InstallationType
+	{
+		NOT_INSTALLED,
+		INSTALLED_SYSTEM,
+		INSTALLED_USER
+	};
+
+	InstallationType installType;
+
+	wxFileName binaryFolder,
+		configFolder,
+		dataFolder;
+
+	static InstallationInfo detectInstallation();
+};

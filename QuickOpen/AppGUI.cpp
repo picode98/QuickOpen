@@ -290,9 +290,21 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 		config->fileSavePath = dynamic_cast<FilePathValidator*>(this->saveFolderPicker->GetValidator())->fileName;
 		config->saveUseLastFolder = this->saveUseLastFolderCheckbox->IsChecked();
 
-		config->saveConfig();
+		bool saveSuccessful = false;
+		try
+		{
+			config->saveConfig();
+			saveSuccessful = true;
+		}
+		catch (const std::exception& ex)
+		{
+			wxMessageBox(wxT("Could not save the configuration file:\n") + wxString::FromUTF8(ex.what()), wxT("Configuration Save Error"), wxICON_ERROR | wxOK, this);
+		}
 
-		this->Close();
+		if(saveSuccessful)
+		{
+			this->Close();
+		}
 	}
 }
 
@@ -365,7 +377,15 @@ void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 
 			WriterReadersLock<AppConfig>::WritableReference config(*configRef);
 			config->fileSavePath = newLastPath;
-			config->saveConfig();
+
+			try
+			{
+				config->saveConfig();
+			}
+			catch (const std::exception& ex)
+			{
+				std::cerr << "WARNING: Could not save last download folder: " << ex.what() << std::endl;
+			}
 		}
 
 		ConsentDialog::OnAcceptClicked(event);

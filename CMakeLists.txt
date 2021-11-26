@@ -1,10 +1,14 @@
 ﻿# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
-cmake_minimum_required (VERSION 3.9)
+cmake_minimum_required (VERSION 3.20)
+set(CPACK_BINARY_ZIP "ON")
 set(CPACK_BINARY_DEB "ON")
-set(CPACK_PACKAGE_CONTACT "Saaman Khalilollahi (picode98)")
-set(CPACK_PACKAGE_DIRECTORY /home/sdk/QuickOpen/release/pkg)
+set(CPACK_BINARY_WIX "ON")
+set(CPACK_BINARY_NSIS "OFF")
+
+set(CPACK_PACKAGE_DIRECTORY "C:\\Users\\saama\\Documents\\Projects\\C++\\QuickOpen\\pkg")
+set(CPACK_PACKAGE_EXECUTABLES "QuickOpen;QuickOpen")
 
 # set(wxWidgets_ROOT_DIR ${VCPKG_ROOT}/installed/x64-windows)
 
@@ -19,6 +23,12 @@ foreach(thisLine ${lineList})
         set(headerVersion ${CMAKE_MATCH_1})
     elseif(thisLine MATCHES "^#define QUICKOPEN_SHORT_DESC \"(.*)\"$")
         set(headerShortDesc ${CMAKE_MATCH_1})
+    elseif(thisLine MATCHES "^#define QUICKOPEN_DEVELOPER \"(.*)\"$")
+        set(CPACK_PACKAGE_CONTACT ${CMAKE_MATCH_1})
+    elseif(thisLine MATCHES "^#define QUICKOPEN_VENDOR \"(.*)\"$")
+        set(CPACK_PACKAGE_VENDOR ${CMAKE_MATCH_1})
+    elseif(thisLine MATCHES "^#define QUICKOPEN_WINDOWS_UPGRADE_GUID \"(.*)\"$")
+        set(upgradeUUID ${CMAKE_MATCH_1})
     endif()
 endforeach()
 
@@ -36,7 +46,16 @@ else()
     message(WARNING "Could not find package summary in header file.")
 endif()
 
+if(DEFINED upgradeUUID)
+    set(CPACK_WIX_UPGRADE_GUID ${upgradeUUID})
+    string(UUID thisBuildUUID NAMESPACE "${upgradeUUID}" NAME "${CMAKE_PROJECT_VERSION}-${CMAKE_BUILD_TYPE}" TYPE SHA1)
+    set(CPACK_WIX_PRODUCT_GUID ${thisBuildUUID})
+endif()
+
 # Include sub-projects.
 add_subdirectory ("QuickOpen")
 
+include(InstallRequiredSystemLibraries)
 include(CPack)
+
+message(WARNING "GUID: ${CPACK_WIX_PRODUCT_GUID}")

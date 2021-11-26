@@ -188,3 +188,23 @@ std::vector<WebBrowserInfo> getInstalledWebBrowsers()
 
     return results;
 }
+
+InstallationInfo InstallationInfo::detectInstallation()
+{
+	wxFileName thisFolder = getAppExecutablePath();
+	thisFolder.SetName("");
+
+	wxString staticEnvVar;
+	bool staticEnvVarSet = wxGetEnv(wxT("QUICKOPEN_STATIC_DIR"), &staticEnvVar);
+
+	if (thisFolder.GetDirs().Last() == wxT("bin"))
+	{
+		return { INSTALLED_PACKAGE, thisFolder, thisFolder / wxFileName("../etc/QuickOpen", ""),
+			staticEnvVarSet ? wxFileName(staticEnvVar, "") : (thisFolder / wxFileName("../share/QuickOpen", "")) };
+	}
+	else
+	{
+		return { NOT_INSTALLED, thisFolder, thisFolder,
+			staticEnvVarSet ? wxFileName(staticEnvVar, "") : thisFolder };
+	}
+}
