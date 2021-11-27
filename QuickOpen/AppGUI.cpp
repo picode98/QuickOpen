@@ -81,6 +81,11 @@ bool FilePathValidator::Validate(wxWindow* parent)
 	std::cout << "Validating " << value.GetFullPath() << std::endl;
 	// bool isValid = value.IsOk() && (!value.GetFullPath().IsEmpty()) && (!absolutePath || value.IsAbsolute());
 
+	if(!m_validatorWindow->IsEnabled())
+	{
+		return true;
+	}
+
 	if (value.IsOk() && (!value.GetFullPath().IsEmpty()))
 	{
 		if (absolutePath && !value.IsAbsolute())

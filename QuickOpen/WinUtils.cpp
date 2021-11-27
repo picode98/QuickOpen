@@ -418,6 +418,7 @@ InstallationInfo InstallationInfo::detectInstallation()
 	wxString staticEnvVar;
 	bool staticEnvVarSet = wxGetEnv(wxT("QUICKOPEN_DATA_DIR"), &staticEnvVar);
 
+#ifdef QUICKOPEN_WINDOWS_PRODUCT_GUID
 	try
 	{
 		tstring installPathStr = readRegistryStringValue(HKEY_LOCAL_MACHINE, 
@@ -446,4 +447,8 @@ InstallationInfo InstallationInfo::detectInstallation()
 			throw;
 		}
 	}
+#else
+	return { NOT_INSTALLED, appExePath, appExePath,
+				staticEnvVarSet ? wxFileName(staticEnvVar, "") : (appExePath / wxFileName("../share/QuickOpen", "")) };
+#endif
 }

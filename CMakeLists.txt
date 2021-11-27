@@ -7,7 +7,7 @@ set(CPACK_BINARY_DEB "ON")
 set(CPACK_BINARY_WIX "ON")
 set(CPACK_BINARY_NSIS "OFF")
 
-set(CPACK_PACKAGE_DIRECTORY "C:\\Users\\saama\\Documents\\Projects\\C++\\QuickOpen\\pkg")
+set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/pkg")
 set(CPACK_PACKAGE_EXECUTABLES "QuickOpen;QuickOpen")
 
 # set(wxWidgets_ROOT_DIR ${VCPKG_ROOT}/installed/x64-windows)

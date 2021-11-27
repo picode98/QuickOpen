@@ -13,7 +13,8 @@ TrayStatusWindow::ActivityEntry::ActivityEntry(wxWindow* parent) : wxBoxSizer(wx
 
 void TrayStatusWindow::OnWindowActivationChanged(wxActivateEvent& event)
 {
-	if (!event.GetActive())
+	// GTK generates spurious deactivation events
+	if (wxPlatformInfo::Get().GetPortId() != wxPORT_GTK && !event.GetActive())
 	{
 		this->Hide();
 	}
@@ -405,3 +406,14 @@ TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std
 
 	this->SetSizerAndFit(topLevelSizer);
 }
+
+//void TrayStatusWindow::ServerURLDisplay::OnSize(wxSizeEvent& event)
+//{
+//	this->SetSize(this->GetSize().GetWidth(), 800 - event.GetSize().GetHeight());
+//
+//	event.Skip();
+//}
+//
+//BEGIN_EVENT_TABLE(TrayStatusWindow::ServerURLDisplay, wxWindow)
+//	EVT_SIZE(TrayStatusWindow::ServerURLDisplay::OnSize)
+//END_EVENT_TABLE()

@@ -114,8 +114,12 @@ public:
 	class ServerURLDisplay : public wxWindow
 	{
 		AutoWrappingStaticText* headerText = nullptr;
+
+		// void OnSize(wxSizeEvent& event);
 	public:
 		ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort);
+
+		// wxDECLARE_EVENT_TABLE();
 	};
 private:
 	wxPanel* topLevelPanel = nullptr;
