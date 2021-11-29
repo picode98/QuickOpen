@@ -35,7 +35,7 @@ struct AppConfig
 {
 	// static const std::map<ConfigKey, wxString> CONFIG_KEY_NAMES;
 
-	bool runAtStartup = false;
+	// bool runAtStartup = false;
 
 	wxString browserID;
 	wxString customBrowserPath;

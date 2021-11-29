@@ -184,8 +184,7 @@ struct InstallationInfo
 	enum InstallationType
 	{
 		NOT_INSTALLED,
-		INSTALLED_SYSTEM,
-		INSTALLED_USER
+		INSTALLED_SYSTEM
 	};
 
 	InstallationType installType;
@@ -196,3 +195,14 @@ struct InstallationInfo
 
 	static InstallationInfo detectInstallation();
 };
+
+enum StartupEntryState
+{
+	ABSENT,
+	PRESENT,
+	DIFFERENT_APPLICATION
+};
+
+void addUserStartupEntry();
+void removeUserStartupEntry();
+StartupEntryState getStartupEntryState();

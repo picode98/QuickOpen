@@ -67,15 +67,36 @@ void handleWinAPIError(LSTATUS retVal, bool checkGLE)
 tstring readRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName)
 {
 	SetLastError(ERROR_SUCCESS);
-	HKEY URLAssocHandle = nullptr;
+	HKEY subkeyHandle = nullptr;
 	auto keyType = REG_NONE;
-	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_READ, &URLAssocHandle));
+	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_READ, &subkeyHandle));
 	DWORD reqBufSize(0);
-	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, nullptr, &reqBufSize));
+	handleWinAPIError(RegQueryValueEx(subkeyHandle, valueName.c_str(), nullptr, &keyType, nullptr, &reqBufSize));
 	std::basic_string<BYTE> str(reqBufSize, BYTE(0));
-	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, str.data(), &reqBufSize));
+	handleWinAPIError(RegQueryValueEx(subkeyHandle, valueName.c_str(), nullptr, &keyType, str.data(), &reqBufSize));
 
+	handleWinAPIError(RegCloseKey(subkeyHandle));
 	return tstring(reinterpret_cast<const TCHAR*>(str.c_str()));
+}
+
+void writeRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName, const tstring& value)
+{
+	SetLastError(ERROR_SUCCESS);
+	HKEY subkeyHandle = nullptr;
+	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_SET_VALUE, &subkeyHandle));
+	handleWinAPIError(RegSetValueEx(subkeyHandle, valueName.c_str(), 0, REG_SZ, reinterpret_cast<const BYTE*>(value.c_str()), value.size() * sizeof(TCHAR) + 1));
+
+	handleWinAPIError(RegCloseKey(subkeyHandle));
+}
+
+void removeRegistryValue(HKEY key, const tstring& subkeyName, const tstring& valueName)
+{
+	SetLastError(ERROR_SUCCESS);
+	HKEY subkeyHandle = nullptr;
+	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_SET_VALUE, &subkeyHandle));
+	handleWinAPIError(RegDeleteValue(subkeyHandle, valueName.c_str()));
+
+	handleWinAPIError(RegCloseKey(subkeyHandle));
 }
 
 void startSubprocess(const wxString& commandLine)
@@ -451,4 +472,39 @@ InstallationInfo InstallationInfo::detectInstallation()
 	return { NOT_INSTALLED, appExePath, appExePath,
 				staticEnvVarSet ? wxFileName(staticEnvVar, "") : (appExePath / wxFileName("../share/QuickOpen", "")) };
 #endif
+}
+
+const tstring USER_STARTUP_SUBKEY = TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+	QUICKOPEN_STARTUP_VALUE_NAME = TEXT("QuickOpen");
+
+void addUserStartupEntry()
+{
+	writeRegistryStringValue(HKEY_CURRENT_USER, USER_STARTUP_SUBKEY, QUICKOPEN_STARTUP_VALUE_NAME,
+		TEXT('"') + wxStringToTString(getAppExecutablePath().GetFullPath()) + TEXT('"'));
+}
+
+void removeUserStartupEntry()
+{
+	removeRegistryValue(HKEY_CURRENT_USER, USER_STARTUP_SUBKEY, QUICKOPEN_STARTUP_VALUE_NAME);
+}
+
+StartupEntryState getStartupEntryState()
+{
+	try
+	{
+		tstring currentValue = readRegistryStringValue(HKEY_CURRENT_USER, USER_STARTUP_SUBKEY, QUICKOPEN_STARTUP_VALUE_NAME);
+		return currentValue == (TEXT('"') + wxStringToTString(getAppExecutablePath().GetFullPath()) + TEXT('"'))
+			? StartupEntryState::PRESENT : StartupEntryState::DIFFERENT_APPLICATION;
+	}
+	catch (const WindowsException& ex)
+	{
+		if(ex.code().value() == ERROR_FILE_NOT_FOUND)
+		{
+			return StartupEntryState::ABSENT;
+		}
+		else
+		{
+			throw;
+		}
+	}
 }

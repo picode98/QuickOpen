@@ -114,6 +114,19 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
                                                             configRef(configRef)
 {
 	WriterReadersLock<AppConfig>::ReadableReference config(configRef);
+	StartupEntryState startupState = getStartupEntryState();
+
+	if(startupState == StartupEntryState::DIFFERENT_APPLICATION)
+	{
+		int result = wxMessageBox(wxT("The startup entry for QuickOpen points to a different application.\n")
+			wxT("This may indicate a corrupted installation. Would you like to reset it?"), wxT("Startup Entry"), wxICON_WARNING | wxYES_NO, this);
+		if(result == wxYES)
+		{
+			addUserStartupEntry();
+			startupState = getStartupEntryState();
+		}
+	}
+
 
 	wxPanel* topLevelPanel = new wxPanel(this);
 	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
@@ -135,13 +148,25 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	// test->Add(systemGroup);
 	// this->systemGroup->SetPosition({ 100, 50 });
 	this->systemGroupSizer = new wxStaticBoxSizer(this->systemGroup, wxVERTICAL);
-	topLevelSizer->Add(systemGroupSizer);
+	topLevelSizer->Add(systemGroupSizer, wxSizerFlags(0).Expand());
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
 	this->runAtStartupCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Run QuickOpen at startup"));
-	this->runAtStartupCheckbox->SetValue(config->runAtStartup);
 	this->systemGroupSizer->Add(runAtStartupCheckbox);
+
+	if(InstallationInfo::detectInstallation().installType == InstallationInfo::INSTALLED_SYSTEM)
+	{
+		this->runAtStartupCheckbox->SetValue(startupState == StartupEntryState::PRESENT);
+	}
+	else
+	{
+		this->runAtStartupCheckbox->Disable();
+		auto userInfoText = new AutoWrappingStaticText(topLevelPanel, wxID_ANY, wxT("To avoid misconfiguration, system settings are only")
+			wxT(" available for installed instances of QuickOpen."));
+		userInfoText->SetForegroundColour(ERROR_TEXT_COLOR);
+		this->systemGroupSizer->Add(userInfoText, wxSizerFlags(0).Expand());
+	}
 
 	this->webpageOpenGroup = new wxStaticBox(topLevelPanel, wxID_ANY, wxT("Opening Webpages"));
 	this->webpageOpenGroupSizer = new wxStaticBoxSizer(this->webpageOpenGroup, wxVERTICAL);
@@ -276,7 +301,20 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 
 		std::cout << "Saving settings." << std::endl;
 
-		config->runAtStartup = runAtStartupCheckbox->IsChecked();
+		// Apply system integration changes if this is a system-wide installation
+		if(InstallationInfo::detectInstallation().installType == InstallationInfo::INSTALLED_SYSTEM)
+		{
+			if (runAtStartupCheckbox->IsChecked())
+			{
+				addUserStartupEntry();
+			}
+			else if (getStartupEntryState() == StartupEntryState::PRESENT)
+			{
+				removeUserStartupEntry();
+			}
+		}
+
+		// config->runAtStartup = runAtStartupCheckbox->IsChecked();
 
 		int selectionIndex = this->browserSelection->GetSelection();
 
