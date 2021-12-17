@@ -14,6 +14,14 @@
 
 #include <nlohmann/json.hpp>
 
+enum class MessageSeverity
+{
+	MSG_ERROR,
+	MSG_WARNING,
+	MSG_INFO,
+	MSG_DEBUG
+};
+
 inline std::map<wxString, wxString> getDependencyVersions()
 {
 	return {

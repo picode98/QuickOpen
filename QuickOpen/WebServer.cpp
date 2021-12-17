@@ -399,20 +399,13 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	if (result == FileOpenSaveConsentDialog::ACCEPT)
 	{
-		std::vector<ConsentToken> newTokens;
-		for (const auto& thisFile : rqFileInfo.fileList)
+		ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
 		{
-			// rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
-			ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
-			newTokens.push_back(newToken);
-
-			{
-				WriterReadersLock<TokenMap>::WritableReference writeRef(tokenWRRef);
-				writeRef->insert({ newToken, thisFile } );
-			}
+			WriterReadersLock<TokenMap>::WritableReference writeRef(tokenWRRef);
+			writeRef->insert({ newToken, rqFileInfo.fileList });
 		}
 
-		sendJSONResponse(conn, 200, nlohmann::json{ {"consentTokens", newTokens} });
+		sendJSONResponse(conn, 200, nlohmann::json{ {"consentToken", newToken } });
 	}
 	else
 	{
@@ -517,111 +510,170 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 
 	auto queryStringMap = parseQueryString(conn);
 
-	if (queryStringMap.count("consentToken") > 0)
-	{
-		ConsentToken parsedToken = atoll(queryStringMap["consentToken"].c_str());
-		FileConsentRequestInfo::RequestedFileInfo consentedFileInfo;
-		bool fileFound = false;
-
-		{
-			WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
-				tokens(consentServiceRef.tokenWRRef);
-
-			if (tokens->count(parsedToken) > 0)
-			{
-				consentedFileInfo = tokens->at(parsedToken);
-				fileFound = true;
-
-				tokens->erase(parsedToken);
-			}
-		}
-
-		if (fileFound)
-		{
-			/*mg_form_data_handler formDataHandler;
-			formDataHandler.field_found = getFieldInfo;
-			formDataHandler.field_get = nullptr;
-			formDataHandler.field_store = onFileStore;
-			formDataHandler.user_data = &consentedFileInfo;
-			
-
-			mg_handle_form_request(conn, &formDataHandler);*/
-
-			//wxFileName destPath;
-			//{
-			//	WriterReadersLock<AppConfig>::ReadableReference configRef(configLock);
-			//	destPath = wxFileName(configRef->fileSavePath);
-			//	destPath.SetFullName(consentedFileInfo.filename);
-			//}
-
-			// TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = nullptr;
-			std::atomic<bool> cancelFlag = false;
-			auto createActivity = [this, consentedFileInfo, &cancelFlag]
-			{
-				return this->progressReportingApp.getTrayWindow()->addFileUploadActivity(consentedFileInfo.consentedFileName, cancelFlag);
-			};
-
-			TrayStatusWindow::FileUploadActivityEntry* activityEntryRef =
-				wxCallAfterSync<QuickOpenApplication, decltype(createActivity), TrayStatusWindow::
-				                FileUploadActivityEntry*>(progressReportingApp, createActivity);
-
-			try
-			{
-				MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize,
-				                   activityEntryRef, cancelFlag);
-				mg_send_http_ok(conn, "text/plain", 0);
-			}
-			catch (const std::system_error& ex)
-			{
-				auto jsonErrorInfo = nlohmann::json(FormErrorList{
-					{
-						{
-							"uploadFile",
-							std::string("An error occurred while attempting to write the file: ") + ex.what()
-						}
-					}
-				});
-				sendJSONResponse(conn, 500, jsonErrorInfo);
-			}
-			catch (const IncorrectFileLengthException&)
-			{
-				auto jsonErrorInfo = nlohmann::json(FormErrorList{
-					{
-						{"uploadFile", "The file sent did not have the length specified by the consent token used."}
-					}
-				});
-				sendJSONResponse(conn, 400, jsonErrorInfo);
-			}
-			catch (const OperationCanceledException&)
-			{
-				auto jsonErrorInfo = nlohmann::json(FormErrorList{
-					{
-						{"uploadFile", "The upload was canceled by the receiving user."}
-					}
-				});
-				sendJSONResponse(conn, 500, jsonErrorInfo);
-			}
-		}
-		else
-		{
-			// mg_send_http_error(conn, 403, "The consent token provided was not valid.");
-			auto jsonErrorInfo = nlohmann::json(FormErrorList{
-				{
-					{"consentToken", "The consent token provided was not valid."}
-				}
-			});
-			sendJSONResponse(conn, 403, jsonErrorInfo);
-		}
-	}
-	else
+	if (queryStringMap.count("consentToken") == 0)
 	{
 		// mg_send_http_error(conn, 401, "No consent token was provided.");
 		auto jsonErrorInfo = nlohmann::json(FormErrorList{
 			{
 				{"consentToken", "No consent token was provided."}
 			}
-		});
+			});
 		sendJSONResponse(conn, 401, jsonErrorInfo);
+
+		return true;
+	}
+	ConsentToken parsedToken = atoll(queryStringMap["consentToken"].c_str());
+
+
+	if (queryStringMap.count("fileIndex") == 0)
+	{
+		// mg_send_http_error(conn, 401, "No consent token was provided.");
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"fileIndex", "No file index was provided."}
+			}
+			});
+		sendJSONResponse(conn, 400, jsonErrorInfo);
+
+		return true;
+	}
+	long long fileIndex = atoll(queryStringMap["fileIndex"].c_str());
+
+
+	FileConsentRequestInfo::RequestedFileInfo consentedFileInfo;
+	bool tokenValid = false, indexValid = false;
+
+	{
+		WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
+			tokens(consentServiceRef.tokenWRRef);
+
+		if (tokens->count(parsedToken) > 0)
+		{
+			tokenValid = true;
+
+			if (fileIndex >= 0 && fileIndex < tokens->at(parsedToken).size() && !tokens->at(parsedToken).at(fileIndex).uploadStarted)
+			{
+				indexValid = true;
+				tokens->at(parsedToken).at(fileIndex).uploadStarted = true;
+				consentedFileInfo = tokens->at(parsedToken).at(fileIndex);
+			}
+		}
+	}
+
+	if (!tokenValid)
+	{
+		// mg_send_http_error(conn, 403, "The consent token provided was not valid.");
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"consentToken", "The consent token provided was not valid."}
+			}
+			});
+		sendJSONResponse(conn, 403, jsonErrorInfo);
+		return true;
+	}
+
+	if (!indexValid)
+	{
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"fileIndex", "The file index provided was not valid."}
+			}
+			});
+		sendJSONResponse(conn, 403, jsonErrorInfo);
+		return true;
+	}
+
+	/*mg_form_data_handler formDataHandler;
+	formDataHandler.field_found = getFieldInfo;
+	formDataHandler.field_get = nullptr;
+	formDataHandler.field_store = onFileStore;
+	formDataHandler.user_data = &consentedFileInfo;
+	
+
+	mg_handle_form_request(conn, &formDataHandler);*/
+
+	//wxFileName destPath;
+	//{
+	//	WriterReadersLock<AppConfig>::ReadableReference configRef(configLock);
+	//	destPath = wxFileName(configRef->fileSavePath);
+	//	destPath.SetFullName(consentedFileInfo.filename);
+	//}
+
+	// TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = nullptr;
+	std::atomic<bool> cancelFlag = false;
+	auto createActivity = [this, consentedFileInfo, &cancelFlag]
+	{
+		return this->progressReportingApp.getTrayWindow()->addFileUploadActivity(consentedFileInfo.consentedFileName, cancelFlag);
+	};
+
+	TrayStatusWindow::FileUploadActivityEntry* activityEntryRef =
+		wxCallAfterSync<QuickOpenApplication, decltype(createActivity), TrayStatusWindow::
+		                FileUploadActivityEntry*>(progressReportingApp, createActivity);
+
+	try
+	{
+		MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize,
+		                   activityEntryRef, cancelFlag);
+		mg_send_http_ok(conn, "text/plain", 0);
+	}
+	catch (const std::system_error& ex)
+	{
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{
+					"uploadFile",
+					std::string("An error occurred while attempting to write the file: ") + ex.what()
+				}
+			}
+		});
+		sendJSONResponse(conn, 500, jsonErrorInfo);
+	}
+	catch (const IncorrectFileLengthException&)
+	{
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"uploadFile", "The file sent did not have the length specified by the consent token used."}
+			}
+		});
+		sendJSONResponse(conn, 400, jsonErrorInfo);
+	}
+	catch (const OperationCanceledException&)
+	{
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"uploadFile", "The upload was canceled by the receiving user."}
+			}
+		});
+		sendJSONResponse(conn, 500, jsonErrorInfo);
+	}
+
+	bool allEnded = true;
+	size_t fileCount = 0;
+	{
+		WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
+			tokens(consentServiceRef.tokenWRRef);
+		fileCount = tokens->at(parsedToken).size();
+
+		tokens->at(parsedToken).at(fileIndex).uploadEnded = true;
+
+		for(const FileConsentRequestInfo::RequestedFileInfo& thisFile : tokens->at(parsedToken))
+		{
+			if(!thisFile.uploadEnded)
+			{
+				allEnded = false;
+				break;
+			}
+		}
+	}
+
+	if (allEnded)
+	{
+		this->progressReportingApp.CallAfter([this, fileCount]
+		{
+			this->progressReportingApp.notifyUser(MessageSeverity::MSG_INFO, wxT("File Upload Completed"),
+				wxString() << fileCount << (fileCount > 1 ? wxT(" files were ") : wxT(" file was "))
+				<< wxT("uploaded."));
+		});
 	}
 
 	return true;

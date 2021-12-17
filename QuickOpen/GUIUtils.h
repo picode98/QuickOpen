@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Utils.h"
+
 #include <wx/wx.h>
 
 template<typename T>
@@ -10,6 +12,22 @@ T& getValidator(wxWindow* obj)
 
 const int DEFAULT_CONTROL_SPACING = 7;
 const wxColour ERROR_TEXT_COLOR = wxColour(0x0000a0);
+
+inline int getMessageSeverityIconStyle(MessageSeverity severity)
+{
+	switch (severity)
+	{
+		case MessageSeverity::MSG_ERROR:
+			return wxICON_INFORMATION;
+		case MessageSeverity::MSG_WARNING:
+			return wxICON_WARNING;
+		case MessageSeverity::MSG_INFO:
+		case MessageSeverity::MSG_DEBUG:
+			return wxICON_INFORMATION;
+		default:
+			throw std::domain_error("Invalid message severity");
+	}
+}
 
 inline wxSizer* setSizerWithPadding(wxWindow* window, wxSizer* content, int paddingWidth = DEFAULT_CONTROL_SPACING)
 {

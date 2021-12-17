@@ -131,6 +131,8 @@ struct FileConsentRequestInfo
 		unsigned long long fileSize;
 
 		wxFileName consentedFileName;
+		bool uploadStarted = false,
+			uploadEnded = false;
 
 		NLOHMANN_DEFINE_TYPE_INTRUSIVE(RequestedFileInfo, filename, fileSize)
 
@@ -158,7 +160,7 @@ class FileConsentTokenService : public CivetHandler
 	// static const size_t MAX_REQUEST_BODY_SIZE = 1 << 16;
 
 public:
-	typedef std::map<ConsentToken, FileConsentRequestInfo::RequestedFileInfo> TokenMap;
+	typedef std::map<ConsentToken, std::vector<FileConsentRequestInfo::RequestedFileInfo>> TokenMap;
 	WriterReadersLock<TokenMap> tokenWRRef;
 private:
 	// TokenMap tokens;

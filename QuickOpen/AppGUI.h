@@ -393,12 +393,51 @@ public:
 	}
 };
 
+class NotificationWindow : public wxGenericMessageDialog
+{
+	std::function<void()> moreInfoCallback;
+	bool created = false;
+
+public:
+	NotificationWindow(wxWindow *parent, MessageSeverity severity, const wxString& message, const wxString& caption, std::function<void()> moreInfoCallback)
+		: wxGenericMessageDialog(parent, message, caption, wxYES_NO | getMessageSeverityIconStyle(severity)), moreInfoCallback(moreInfoCallback)
+	{
+		this->SetYesNoLabels(wxID_OK, wxT("More Information"));
+	}
+
+	bool Show(bool show = true) override
+	{
+		if (!created)
+		{
+			this->DoCreateMsgdialog();
+			created = true;
+		}
+
+		return wxGenericMessageDialog::Show(show);
+	}
+
+private:
+	void OnMoreInfoClicked(wxCommandEvent& event)
+	{
+		moreInfoCallback();
+		this->Close();
+	}
+
+	void OnOKClicked(wxCommandEvent& event)
+	{
+		this->Close();
+	}
+
+	wxDECLARE_EVENT_TABLE();
+};
+
 class QuickOpenApplication : public wxApp
 {
 	std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
 	QuickOpenTaskbarIcon* icon = nullptr;
 	std::unique_ptr<QuickOpenWebServer> server;
 	// QuickOpenSettings* settingsWindow = nullptr;
+
 public:
 	bool OnInit() override
 	{
@@ -441,6 +480,29 @@ public:
 	TrayStatusWindow* getTrayWindow() const
 	{
 		return this->icon->getTrayWindow();
+	}
+
+	QuickOpenTaskbarIcon* getTrayIcon() const
+	{
+		return this->icon;
+	}
+
+	void notifyUser(MessageSeverity severity, const wxString& title, const wxString& text)
+	{
+		bool notificationShown = false;
+#ifdef wxUSE_TASKBARICON_BALLOONS
+		notificationShown = this->icon->ShowBalloon(title, text, 0, wxICON_INFORMATION);
+#endif
+
+		if(!notificationShown)
+		{
+			auto notifyWindow = new NotificationWindow(nullptr, severity, text, title, [this]
+			{
+				this->getTrayWindow()->showAtCursor();
+			});
+			notifyWindow->Show();
+			notifyWindow->RequestUserAttention();
+		}
 	}
 
 	int OnExit() override

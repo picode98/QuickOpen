@@ -531,4 +531,9 @@ wxBEGIN_EVENT_TABLE(QuickOpenTaskbarIcon::TaskbarMenu, wxMenu)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::EXIT, QuickOpenTaskbarIcon::TaskbarMenu::OnExitItemSelected)
 wxEND_EVENT_TABLE()
 
+wxBEGIN_EVENT_TABLE(NotificationWindow, wxGenericMessageDialog)
+	EVT_BUTTON(wxID_YES, NotificationWindow::OnOKClicked)
+	EVT_BUTTON(wxID_NO, NotificationWindow::OnMoreInfoClicked)
+wxEND_EVENT_TABLE()
+
 wxIMPLEMENT_APP(QuickOpenApplication);

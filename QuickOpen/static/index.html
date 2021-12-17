@@ -53,10 +53,10 @@
                 });
             }
 
-            function uploadFile(fileList, consentTokenList, index)
+            function uploadFile(fileList, consentToken, index)
             {
                 $.post({
-                    url: '/api/openSaveFile?consentToken=' + consentTokenList[index],
+                    url: '/api/openSaveFile?consentToken=' + consentToken + '&fileIndex=' + index,
                     data: fileList[index],
                     contentType: 'application/octet-stream',
                     processData: false,
@@ -89,7 +89,7 @@
                     }
                     else
                     {
-                        uploadFile(fileList, consentTokenList, index + 1);
+                        uploadFile(fileList, consentToken, index + 1);
                     }
                 });
             }
@@ -143,7 +143,7 @@
                 }).done(data =>
                 {
                     $('#file-upload-status-text').text('Starting upload...');
-                    uploadFile(files, data.consentTokens, 0);
+                    uploadFile(files, data.consentToken, 0);
 
                 }).fail((jqXHR, textStatus, errorThrown) =>
                 {
