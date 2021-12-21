@@ -180,7 +180,7 @@ std::vector<WebBrowserInfo> getInstalledWebBrowsers()
     while((currentLineLength = getline(&currentLine, &currentLineBufSize, alternativesProc)) != -1)
     {
         std::cmatch matchResults;
-        if(std::regex_match(currentLine, matchResults, std::regex("Alternative: (.*)")))
+        if(std::regex_match(currentLine, matchResults, std::regex("Alternative: (.*)\n")))
         {
             results.emplace_back(WebBrowserInfo { matchResults[1].str(), matchResults[1].str(), matchResults[1].str() + " \"%1\"" } );
         }

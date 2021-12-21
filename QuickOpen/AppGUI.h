@@ -490,7 +490,7 @@ public:
 	void notifyUser(MessageSeverity severity, const wxString& title, const wxString& text)
 	{
 		bool notificationShown = false;
-#ifdef wxUSE_TASKBARICON_BALLOONS
+#if wxUSE_TASKBARICON_BALLOONS
 		notificationShown = this->icon->ShowBalloon(title, text, 0, wxICON_INFORMATION);
 #endif
 

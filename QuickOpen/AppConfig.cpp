@@ -59,7 +59,7 @@ void AppConfig::saveConfig(const wxFileName& filePath)
 	wxFileName dirName = getDirName(effectiveFilePath);
 	if(!dirName.DirExists() && !dirName.Mkdir())
 	{
-		throw std::exception("The configuration folder does not exist and could not be created.");
+		throw std::runtime_error("The configuration folder does not exist and could not be created.");
 	}
 
 	std::ofstream fileOutput;

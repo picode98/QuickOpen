@@ -69,7 +69,7 @@
                                 if (progressEvt.lengthComputable)
                                 {
                                     let currentProgress = (progressEvt.loaded / progressEvt.total) * 100.0;
-                                    $('#file-upload-status-text').text(`Uploading file "${fileList[index].filename}" (File ${index + 1} of ${fileList.length}, ${currentProgress.toFixed(1)}% complete)...`);
+                                    $('#file-upload-status-text').text(`Uploading file "${fileList[index].name}" (File ${index + 1} of ${fileList.length}, ${currentProgress.toFixed(1)}% complete)...`);
                                 }
                             });
                         return newXHR;
