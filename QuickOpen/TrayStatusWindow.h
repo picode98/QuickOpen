@@ -129,6 +129,7 @@ private:
 
 	void OnWindowActivationChanged(wxActivateEvent& event);
 	void OnShow(wxShowEvent& event);
+    void OnClose(wxCloseEvent& event);
 	void fitActivityListWidth();
 
 public:

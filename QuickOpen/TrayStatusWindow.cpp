@@ -52,7 +52,7 @@ void TrayStatusWindow::fitActivityListWidth()
 TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
 	wxSize(300, 300),
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
-		wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxCLOSE_BOX))
+		wxMINIMIZE_BOX | wxMAXIMIZE_BOX))
 {
 	topLevelPanel = new wxPanel(this);
 	auto* panelSizer = new wxBoxSizer(wxVERTICAL);
@@ -97,9 +97,23 @@ void TrayStatusWindow::SetFocus()
 	this->activityList->SetFocus();
 }
 
+void TrayStatusWindow::OnClose(wxCloseEvent& event)
+{
+    if(event.CanVeto())
+    {
+        event.Veto();
+        this->Hide();
+    }
+    else
+    {
+        event.Skip();
+    }
+}
+
 wxBEGIN_EVENT_TABLE(TrayStatusWindow, wxFrame)
 	EVT_ACTIVATE(TrayStatusWindow::OnWindowActivationChanged)
 	EVT_SHOW(TrayStatusWindow::OnShow)
+    EVT_CLOSE(TrayStatusWindow::OnClose)
 wxEND_EVENT_TABLE()
 
 void TrayStatusWindow::WebpageOpenedActivityEntry::OnCopyURLButtonClick(wxCommandEvent& event)
