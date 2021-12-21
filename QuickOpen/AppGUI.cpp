@@ -114,6 +114,8 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
                                                             configRef(configRef)
 {
 	WriterReadersLock<AppConfig>::ReadableReference config(configRef);
+
+#ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
 	StartupEntryState startupState = getStartupEntryState();
 
 	if(startupState == StartupEntryState::DIFFERENT_APPLICATION)
@@ -126,6 +128,7 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 			startupState = getStartupEntryState();
 		}
 	}
+#endif
 
 
 	wxPanel* topLevelPanel = new wxPanel(this);
@@ -155,6 +158,7 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	this->runAtStartupCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Run QuickOpen at startup"));
 	this->systemGroupSizer->Add(runAtStartupCheckbox);
 
+#ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
 	if(InstallationInfo::detectInstallation().installType == InstallationInfo::INSTALLED_SYSTEM)
 	{
 		this->runAtStartupCheckbox->SetValue(startupState == StartupEntryState::PRESENT);
@@ -167,6 +171,12 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 		userInfoText->SetForegroundColour(ERROR_TEXT_COLOR);
 		this->systemGroupSizer->Add(userInfoText, wxSizerFlags(0).Expand());
 	}
+#else
+	this->runAtStartupCheckbox->Disable();
+	auto userInfoText = new AutoWrappingStaticText(topLevelPanel, wxID_ANY, wxT("Feature not currently supported on this platform"));
+	userInfoText->SetForegroundColour(ERROR_TEXT_COLOR);
+	this->systemGroupSizer->Add(userInfoText, wxSizerFlags(0).Expand());
+#endif
 
 	this->webpageOpenGroup = new wxStaticBox(topLevelPanel, wxID_ANY, wxT("Opening Webpages"));
 	this->webpageOpenGroupSizer = new wxStaticBoxSizer(this->webpageOpenGroup, wxVERTICAL);
@@ -301,6 +311,7 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 
 		std::cout << "Saving settings." << std::endl;
 
+#ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
 		// Apply system integration changes if this is a system-wide installation
 		if(InstallationInfo::detectInstallation().installType == InstallationInfo::INSTALLED_SYSTEM)
 		{
@@ -313,6 +324,7 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 				removeUserStartupEntry();
 			}
 		}
+#endif
 
 		// config->runAtStartup = runAtStartupCheckbox->IsChecked();
 
