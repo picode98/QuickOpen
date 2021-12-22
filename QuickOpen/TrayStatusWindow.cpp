@@ -4,6 +4,7 @@
 #include <wx/hyperlink.h>
 #include <wx/url.h>
 
+#include "AppConfig.h"
 #include "GUIUtils.h"
 #include "PlatformUtils.h"
 
@@ -26,7 +27,8 @@ void TrayStatusWindow::OnShow(wxShowEvent& event)
 {
 	if (event.IsShown())
 	{
-		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 8080);
+		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
+			WriterReadersLock<AppConfig>::ReadableReference(configRef)->serverPort);
 		bool replaced = topLevelSizer->Replace(URLDisplay, newDisplay);
 		assert(replaced);
 		topLevelPanel->RemoveChild(URLDisplay);
@@ -49,17 +51,18 @@ void TrayStatusWindow::fitActivityListWidth()
 	}
 }
 
-TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
+TrayStatusWindow::TrayStatusWindow(WriterReadersLock<AppConfig>& configRef) : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
 	wxSize(300, 300),
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
-		wxMINIMIZE_BOX | wxMAXIMIZE_BOX))
+		wxMINIMIZE_BOX | wxMAXIMIZE_BOX)), configRef(configRef)
 {
 	topLevelPanel = new wxPanel(this);
 	auto* panelSizer = new wxBoxSizer(wxVERTICAL);
 	panelSizer->Add(topLevelPanel, wxSizerFlags(1).Expand());
 
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 8080), wxSizerFlags(0).Expand());
+	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
+		WriterReadersLock<AppConfig>::ReadableReference(configRef)->serverPort), wxSizerFlags(0).Expand());
 	topLevelSizer->Add(activityList = new ActivityList(topLevelPanel), wxSizerFlags(1).Expand());
 	setSizerWithPadding(topLevelPanel, topLevelSizer);
 	topLevelPanel->Fit();

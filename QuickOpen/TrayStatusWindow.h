@@ -11,6 +11,8 @@
 #include "GUIUtils.h"
 #include "PlatformUtils.h"
 
+struct AppConfig;
+
 class TrayStatusWindow : public wxFrame
 {
 public:
@@ -122,6 +124,8 @@ public:
 		// wxDECLARE_EVENT_TABLE();
 	};
 private:
+	WriterReadersLock<AppConfig>& configRef;
+
 	wxPanel* topLevelPanel = nullptr;
 	wxBoxSizer* topLevelSizer = nullptr;
 	ServerURLDisplay* URLDisplay = nullptr;
@@ -133,7 +137,7 @@ private:
 	void fitActivityListWidth();
 
 public:
-	TrayStatusWindow();
+	TrayStatusWindow(WriterReadersLock<AppConfig>& configRef);
 
     void showAtCursor()
     {

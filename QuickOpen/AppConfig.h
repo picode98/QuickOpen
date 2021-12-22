@@ -43,7 +43,7 @@ struct AppConfig
 	bool saveUseLastFolder = true;
 	wxFileName fileSavePath;
 
-	long maxSaveFileSize = 1 << 20;
+	WithStaticDefault<unsigned, 8080> serverPort;
 
 	static inline wxFileName defaultConfigPath()
 	{

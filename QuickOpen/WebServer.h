@@ -34,7 +34,6 @@
 #include "PlatformUtils.h"
 
 const std::filesystem::path STATIC_PATH = std::filesystem::current_path() / "static";
-const int PORT = 8080;
 
 typedef uint32_t ConsentToken;
 
@@ -186,11 +185,26 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 	FileConsentTokenService& consentServiceRef;
 	QuickOpenApplication& progressReportingApp;
 
-	class IncorrectFileLengthException : std::exception
-	{};
+	class IncorrectFileLengthException : public std::runtime_error
+	{
+	public:
+		IncorrectFileLengthException() : std::runtime_error("The length of the uploaded file differs from the consented length")
+		{}
+	};
 
-	class OperationCanceledException : std::exception
-	{};
+	class OperationCanceledException : public std::runtime_error
+	{
+	public:
+		OperationCanceledException() : std::runtime_error("The operation was canceled by the user")
+		{}
+	};
+
+	class ConnectionClosedException : public std::runtime_error
+	{
+	public:
+		ConnectionClosedException() : std::runtime_error("The connection was closed")
+		{}
+	};
 
 	void MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize,
 		TrayStatusWindow::FileUploadActivityEntry* uploadActivityEntryRef, std::atomic<bool>& cancelRequestFlag);
@@ -217,10 +231,10 @@ class QuickOpenWebServer : public CivetServer
 	FileConsentTokenService fileConsentTokenService;
 	OpenSaveFileAPIEndpoint fileAPIEndpoint;
 public:
-	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef):
+	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef, unsigned port):
 		CivetServer({
 			"document_root", STATIC_PATH.generic_string(),
-			"listening_ports", '+' + std::to_string(PORT)
+			"listening_ports", '+' + std::to_string(port)
 		}),
 		wrLock(wrLock),
 		staticHandler("/"),
@@ -234,6 +248,11 @@ public:
 		this->addHandler("/api/openWebpage", webpageAPIEndpoint);
 		this->addHandler("/api/openSaveFile", fileAPIEndpoint);
 		this->addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);
+	}
+
+	~QuickOpenWebServer() override
+	{
+		this->close();
 	}
 };
 

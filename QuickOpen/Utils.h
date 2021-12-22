@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <map>
+#include <optional>
 
 #include <civetweb.h>
 
@@ -132,6 +133,76 @@ public:
 		rwLock.unlock();
 	}
 };
+
+template<typename T, T defaultValue>
+class WithStaticDefault
+{
+	std::optional<T> value;
+public:
+	static const T DEFAULT_VALUE = defaultValue;
+
+	WithStaticDefault() {}
+
+	WithStaticDefault(const T& value) : value(value)
+	{}
+
+	T effectiveValue() const
+	{
+		return value.value_or(defaultValue);
+	}
+
+	operator T() const
+	{
+		return effectiveValue();
+	}
+
+	WithStaticDefault& operator=(const T& rhs)
+	{
+		this->value = rhs;
+		return *this;
+	}
+
+	void reset()
+	{
+		this->value.reset();
+	}
+
+	bool isSet() const
+	{
+		return this->value.has_value();
+	}
+};
+
+namespace nlohmann
+{
+	template<typename T, T defaultValue>
+	struct adl_serializer<WithStaticDefault<T, defaultValue>>
+	{
+		static void to_json(json& j, const WithStaticDefault<T, defaultValue>& opt)
+		{
+			if(opt.isSet())
+			{
+				j = static_cast<T>(opt);
+			}
+			else
+			{
+				j = nullptr;
+			}
+		}
+
+		static void from_json(const json& j, WithStaticDefault<T, defaultValue>& opt)
+		{
+			if(j.is_null())
+			{
+				opt.reset();
+			}
+			else
+			{
+				opt = static_cast<T>(j);
+			}
+		}
+	};
+}
 
 inline long strtol(const wxString& str)
 {

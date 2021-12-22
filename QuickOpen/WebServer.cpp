@@ -464,11 +464,6 @@ void OpenSaveFileAPIEndpoint::MGStoreBodyChecked(mg_connection* conn, const wxFi
 				uploadActivityEntryRef->setProgress((static_cast<double>(bytesWritten) / targetFileSize) * 100.0);
 			});
 		}
-
-		progressReportingApp.CallAfter([uploadActivityEntryRef]
-		{
-			uploadActivityEntryRef->setCompleted(true);
-		});
 	}
 	catch (const std::ios_base::failure& ex)
 	{
@@ -491,6 +486,13 @@ void OpenSaveFileAPIEndpoint::MGStoreBodyChecked(mg_connection* conn, const wxFi
 	if (bytesWritten != targetFileSize)
 	{
 		throw IncorrectFileLengthException();
+	}
+	else
+	{
+		progressReportingApp.CallAfter([uploadActivityEntryRef]
+		{
+			uploadActivityEntryRef->setCompleted(true);
+		});
 	}
 }
 
@@ -628,8 +630,9 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 		});
 		sendJSONResponse(conn, 500, jsonErrorInfo);
 	}
-	catch (const IncorrectFileLengthException&)
+	catch (const IncorrectFileLengthException& ex)
 	{
+		progressReportingApp.CallAfter([activityEntryRef, ex] { activityEntryRef->setError(&ex); });
 		auto jsonErrorInfo = nlohmann::json(FormErrorList{
 			{
 				{"uploadFile", "The file sent did not have the length specified by the consent token used."}
@@ -637,7 +640,7 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 		});
 		sendJSONResponse(conn, 400, jsonErrorInfo);
 	}
-	catch (const OperationCanceledException&)
+	catch (const OperationCanceledException& ex)
 	{
 		auto jsonErrorInfo = nlohmann::json(FormErrorList{
 			{
@@ -645,6 +648,10 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 			}
 		});
 		sendJSONResponse(conn, 500, jsonErrorInfo);
+	}
+	catch (const ConnectionClosedException& ex)
+	{
+		progressReportingApp.CallAfter([activityEntryRef, ex]{ activityEntryRef->setError(&ex); });
 	}
 
 	bool allEnded = true;
@@ -668,9 +675,10 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 
 	if (allEnded)
 	{
-		this->progressReportingApp.CallAfter([this, fileCount]
+		QuickOpenApplication& appRef = this->progressReportingApp;
+		this->progressReportingApp.CallAfter([&appRef, fileCount]
 		{
-			this->progressReportingApp.notifyUser(MessageSeverity::MSG_INFO, wxT("File Upload Completed"),
+			appRef.notifyUser(MessageSeverity::MSG_INFO, wxT("File Upload Completed"),
 				wxString() << fileCount << (fileCount > 1 ? wxT(" files were ") : wxT(" file was "))
 				<< wxT("uploaded."));
 		});

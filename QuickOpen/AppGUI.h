@@ -115,6 +115,8 @@ inline wxFileName getAppIconPath()
 
 class QuickOpenSettings : public wxFrame
 {
+	wxSpinCtrl* serverPortCtrl;
+
 	// wxPanel* panel;
 	wxStaticBox* systemGroup;
 	wxStaticBoxSizer* systemGroupSizer;
@@ -288,6 +290,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 		enum MenuItems
 		{
             STATUS,
+			CLIENT_PAGE,
 			SETTINGS,
             ABOUT,
 			EXIT
@@ -297,9 +300,10 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
             statusWindow(statusWindow)
 		{
             this->Append(STATUS, wxT("Open Status"));
+			this->Append(CLIENT_PAGE, wxT("Open Client Webpage"));
 			this->Append(SETTINGS, wxT("Open Settings"));
-            this->Append(ABOUT, wxT("About QuickOpen"));
 			this->AppendSeparator();
+            this->Append(ABOUT, wxT("About QuickOpen"));
 			this->Append(EXIT, wxT("Exit QuickOpen"));
 		}
 
@@ -307,6 +311,12 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
         {
             this->statusWindow->showAtCursor();
         }
+
+		void OnClientPageItemSelected(wxCommandEvent& event)
+		{
+			unsigned currentPort = WriterReadersLock<AppConfig>::ReadableReference(configRef)->serverPort;
+			openURL(std::string("http://localhost") + (currentPort != 80 ? ":" + std::to_string(currentPort) : ""));
+		}
 
 		void OnSettingsItemSelected(wxCommandEvent& event)
 		{
@@ -384,7 +394,7 @@ public:
 		this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO), wxT("QuickOpen"));
 		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
 
-		this->statusWindow = new TrayStatusWindow();
+		this->statusWindow = new TrayStatusWindow(configRef);
 	}
 
 	TrayStatusWindow* getTrayWindow() const
@@ -457,13 +467,7 @@ public:
 
 		configRef = std::make_shared<WriterReadersLock<AppConfig>>(config);
 
-        try {
-            server = std::make_unique<QuickOpenWebServer>(configRef, *this);
-        }
-        catch(const std::exception& ex)
-        {
-            std::cout << ex.what() << std::endl;
-        }
+		setupServer(configRef->obj->serverPort);
 		
 		assert(configRef != nullptr);
 		this->icon = new QuickOpenTaskbarIcon(*configRef);
@@ -503,6 +507,11 @@ public:
 			notifyWindow->Show();
 			notifyWindow->RequestUserAttention();
 		}
+	}
+
+	void setupServer(unsigned newPort)
+	{
+		server = std::make_unique<QuickOpenWebServer>(configRef, *this, newPort);
 	}
 
 	int OnExit() override

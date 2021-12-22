@@ -42,6 +42,7 @@ void AppConfig::saveConfig(const wxFileName& filePath)
 
 	nlohmann::json jsonConfig = {
 		// {"runAtStartup", runAtStartup},
+		{"serverPort", serverPort},
 		{
 			"webpageOpen", {
 				{"browserID", browserID},
@@ -94,6 +95,8 @@ AppConfig AppConfig::loadConfig(const wxFileName& filePath)
 
 	AppConfig newConfig;
 	// getSettingWarn(jsonConfig, "runAtStartup", newConfig.runAtStartup);
+
+	getSettingWarn(jsonConfig, "serverPort", newConfig.serverPort);
 
 	nlohmann::json openWebpageSettings;
 	if (getSettingWarn(jsonConfig, "webpageOpen", openWebpageSettings))

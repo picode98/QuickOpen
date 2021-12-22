@@ -1,5 +1,7 @@
 #include "AppGUI.h"
 
+wxIMPLEMENT_APP(QuickOpenApplication);
+
 wxBoxSizer* makeLabeledSizer(wxWindow* control, const wxString& labelText, wxWindow* parent, int spacing)
 {
 	auto sizer = new wxBoxSizer(wxHORIZONTAL);
@@ -257,9 +259,10 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	topLevelSizer->Add(fileOpenSaveGroupSizer, wxSizerFlags(0).Expand());
 
 	fileOpenSaveGroupSizer->Add(
-		makeLabeledSizer(new wxSpinCtrl(topLevelPanel, wxID_ANY, (wxString() << config->maxSaveFileSize), wxDefaultPosition,
-		                                wxDefaultSize, wxSP_ARROW_KEYS, 0, 1024),
-		                 wxT("Maximum size for uploaded files:"), topLevelPanel),
+		makeLabeledSizer(serverPortCtrl = new wxSpinCtrl(topLevelPanel, wxID_ANY,
+									(config->serverPort.isSet() ? (wxString() << config->serverPort) : wxEmptyString), wxDefaultPosition,
+		                                wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535),
+		                 wxString(wxT("Server port (default: ")) << decltype(config->serverPort)::DEFAULT_VALUE << wxT(")"), topLevelPanel),
 		wxSizerFlags(0).Expand());
 
 	fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
@@ -332,6 +335,21 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 
 		bool selectionIsInstalledBrowser = selectionIndex >= this->browserSelInstalledListStartIndex
 			&& selectionIndex < this->browserSelInstalledListStartIndex + this->installedBrowsers.size();
+
+		auto oldServerPort = config->serverPort;
+		if(this->serverPortCtrl->GetValue() == 0)
+		{
+			config->serverPort.reset();
+		}
+		else
+		{
+			config->serverPort = this->serverPortCtrl->GetValue();
+		}
+
+		if(oldServerPort.effectiveValue() != config->serverPort.effectiveValue())
+		{
+			wxGetApp().setupServer(config->serverPort);
+		}
 
 		config->browserID = selectionIsInstalledBrowser
 			                    ? this->installedBrowsers[selectionIndex - this->browserSelInstalledListStartIndex].
@@ -538,6 +556,7 @@ std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
 
 wxBEGIN_EVENT_TABLE(QuickOpenTaskbarIcon::TaskbarMenu, wxMenu)
     EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::STATUS, QuickOpenTaskbarIcon::TaskbarMenu::OnStatusItemSelected)
+	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::CLIENT_PAGE, QuickOpenTaskbarIcon::TaskbarMenu::OnClientPageItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::SETTINGS, QuickOpenTaskbarIcon::TaskbarMenu::OnSettingsItemSelected)
     EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::ABOUT, QuickOpenTaskbarIcon::TaskbarMenu::OnAboutItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::EXIT, QuickOpenTaskbarIcon::TaskbarMenu::OnExitItemSelected)
@@ -547,5 +566,3 @@ wxBEGIN_EVENT_TABLE(NotificationWindow, wxGenericMessageDialog)
 	EVT_BUTTON(wxID_YES, NotificationWindow::OnOKClicked)
 	EVT_BUTTON(wxID_NO, NotificationWindow::OnMoreInfoClicked)
 wxEND_EVENT_TABLE()
-
-wxIMPLEMENT_APP(QuickOpenApplication);
