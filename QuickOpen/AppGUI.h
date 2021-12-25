@@ -33,7 +33,7 @@
 #include "GUIUtils.h"
 #include "Utils.h"
 #include <atomic>
-#include <CivetServer.h>
+#include "CivetWebIncludes.h"
 #include <wx/url.h>
 
 #include "ApplicationInfo.h"

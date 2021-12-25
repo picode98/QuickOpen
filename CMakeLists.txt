@@ -54,7 +54,8 @@ if(DEFINED upgradeUUID)
 endif()
 
 # Include sub-projects.
-add_subdirectory ("QuickOpen")
+add_subdirectory("QuickOpen")
+add_subdirectory("Tests")
 
 include(InstallRequiredSystemLibraries)
 include(CPack)

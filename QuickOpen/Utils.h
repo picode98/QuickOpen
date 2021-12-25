@@ -11,7 +11,7 @@
 #include <map>
 #include <optional>
 
-#include <civetweb.h>
+#include "CivetWebIncludes.h"
 
 #include <nlohmann/json.hpp>
 
@@ -273,6 +273,7 @@ inline wxString substituteFormatString(const wxString& format, wxUniChar placeho
 					: (getPlaceholderValue(args, kwArgs, currentPlaceholderStr, parsingKWPlaceholder) +
 						thisChar);
 				parsingPlaceholder = parsingKWPlaceholder = false;
+				currentPlaceholderStr = wxEmptyString;
 			}
 		}
 		else if (thisChar == placeholderChar)

@@ -16,7 +16,7 @@
 #include <string>
 
 
-#include <CivetServer.h>
+#include "CivetWebIncludes.h"
 
 // #include <boost/process.hpp>
 
