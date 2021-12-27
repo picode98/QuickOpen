@@ -1,5 +1,7 @@
 #include "AppGUI.h"
 
+#include "WebServer.h"
+
 wxIMPLEMENT_APP(QuickOpenApplication);
 
 wxBoxSizer* makeLabeledSizer(wxWindow* control, const wxString& labelText, wxWindow* parent, int spacing)
@@ -433,6 +435,47 @@ void QuickOpenSettings::updateSaveFolderEnabledState()
 	}
 }
 
+ConsentDialog::ConsentDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxString& requesterName): wxDialog(parent, id, title, wxDefaultPosition, wxDefaultSize,
+                                                                                                                              wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+{
+	topLevelSizer = new wxBoxSizer(wxVERTICAL);
+	topLevelSizer->Add(content = new wxWindow(this, wxID_ANY), wxSizerFlags(1).Expand());
+
+	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+	topLevelSizer->Add(denyFutureRequestsCheckbox = new wxCheckBox(this, wxID_ANY, wxT("Decline future requests from ") + requesterName + wxT(" (until QuickOpen is restarted)")),
+	                   wxSizerFlags(0).Expand());
+	denyFutureRequestsCheckbox->Bind(wxEVT_CHECKBOX, &ConsentDialog::OnDenyFutureRequestsCheckboxChecked, this);
+
+	auto* bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL);
+
+	bottomButtonSizer->AddStretchSpacer(1);
+	bottomButtonSizer->Add(acceptButton = new wxButton(this, wxID_ANY, wxT("Accept")));
+	bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+	bottomButtonSizer->Add(rejectButton = new wxButton(this, wxID_ANY, wxT("Decline")));
+
+	topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
+
+	acceptButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnAcceptClicked, this);
+	rejectButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnDeclineClicked, this);
+
+	setSizerWithPadding(this, topLevelSizer);
+	this->Fit();
+}
+
+WebpageOpenConsentDialog::WebpageOpenConsentDialog(const wxString& URL, const wxString& requesterName):
+	ConsentDialog(nullptr, wxID_ANY, wxT("Webpage Open Request"), requesterName)
+{
+	wxWindow* contentWindow = new wxWindow(this, wxID_ANY);
+	wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
+	contentSizer->Add(headerText = new wxStaticText(contentWindow, wxID_ANY,
+	                                                wxString() << wxT("A user at " << requesterName << wxT(" is requesting that you open the following URL:\n\n") << URL
+		                                                << wxT("\n\nWould you like to proceed?"))), wxSizerFlags(0).Expand());
+
+	contentWindow->SetSizerAndFit(contentSizer);
+	this->setContent(contentWindow);
+}
+
 void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 {
 	if (this->Validate() && this->TransferDataFromWindow())
@@ -471,7 +514,7 @@ void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 
 FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo,
 	std::shared_ptr<WriterReadersLock<AppConfig>> configRef, const wxString& requesterName) :
-	ConsentDialog(nullptr, wxID_ANY, wxT("Receiving File"), requesterName), requestInfo(requestInfo),
+	ConsentDialog(nullptr, wxID_ANY, wxT("Receiving File"), requesterName), requestInfo(std::make_unique<FileConsentRequestInfo>(requestInfo)),
 	configRef(configRef), defaultDestinationFolder(defaultDestinationFolder)
 {
 	wxWindow* contentWindow = new wxWindow(this, wxID_ANY);
@@ -540,7 +583,7 @@ std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
 	{
 		std::vector<wxFileName> fileNames;
 		wxFileName destFolder = dynamic_cast<FilePathValidator*>(destFolderNameInput->GetValidator())->fileName;
-		for(const auto& thisFile : requestInfo.fileList)
+		for(const auto& thisFile : requestInfo->fileList)
 		{
 			fileNames.push_back(destFolder);
 			fileNames.back().SetFullName(thisFile.filename);
@@ -554,8 +597,171 @@ std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
 	}
 }
 
+QuickOpenTaskbarIcon::TaskbarMenu::TaskbarMenu(WriterReadersLock<AppConfig>& configRef, TrayStatusWindow* statusWindow): configRef(configRef),
+	statusWindow(statusWindow)
+{
+	this->Append(STATUS, wxT("Open Status"));
+	this->Append(CLIENT_PAGE, wxT("Open Client Webpage"));
+	this->Append(SETTINGS, wxT("Open Settings"));
+	this->AppendSeparator();
+	this->Append(ABOUT, wxT("About QuickOpen"));
+	this->Append(EXIT, wxT("Exit QuickOpen"));
+}
+
+void QuickOpenTaskbarIcon::TaskbarMenu::OnClientPageItemSelected(wxCommandEvent& event)
+{
+	unsigned currentPort = WriterReadersLock<AppConfig>::ReadableReference(configRef)->serverPort;
+	openURL(std::string("http://localhost") + (currentPort != 80 ? ":" + std::to_string(currentPort) : ""));
+}
+
+void QuickOpenTaskbarIcon::TaskbarMenu::OnAboutItemSelected(wxCommandEvent& event)
+{
+	wxString depStr = wxT("with additional credit to developers of the following dependencies:\n");
+
+	auto depVersions = getDependencyVersions();
+	for(auto item = depVersions.begin(); item != depVersions.end(); ++item)
+	{
+		auto nextItem = std::next(item);
+
+		depStr += item->first + wxT(" (version ") + item->second + wxT(")");
+				
+		if(nextItem != depVersions.end())
+		{
+			if (std::next(nextItem) == depVersions.end())
+			{
+				depStr += wxT(", and ");
+			}
+			else
+			{
+				depStr += wxT(", ");
+			}
+		}
+	}
+
+	wxAboutDialogInfo aboutDialogInfo;
+	aboutDialogInfo.AddDeveloper(wxT(QUICKOPEN_DEVELOPER));
+	aboutDialogInfo.AddDeveloper(depStr);
+	// aboutDialogInfo.AddDeveloper(wxT(""))
+	aboutDialogInfo.SetVersion(wxString(wxT("Version ")) + wxT(QUICKOPEN_VERSION_STR));
+	aboutDialogInfo.SetDescription(wxT(QUICKOPEN_SHORT_DESC));
+	aboutDialogInfo.SetCopyright(wxT(QUICKOPEN_LICENSE));
+	aboutDialogInfo.SetWebSite(wxT(QUICKOPEN_REPO_URL));
+	aboutDialogInfo.SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
+	// aboutDialogInfo.GetDescriptionAndCredits()
+
+	wxAboutBox(aboutDialogInfo);
+}
+
+bool QuickOpenApplication::OnInit()
+{
+	this->SetAppName(wxT("QuickOpen"));
+	this->SetAppDisplayName(wxT("QuickOpen"));
+
+	std::unique_ptr<AppConfig> config = std::make_unique<AppConfig>();
+
+	try
+	{
+		*config = AppConfig::loadConfig();
+	}
+	catch (const std::ios_base::failure&)
+	{
+		std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::defaultConfigPath().GetFullPath() << "\"." << std::endl;
+	}
+
+	configRef = std::make_shared<WriterReadersLock<AppConfig>>(config);
+
+	setupServer(configRef->obj->serverPort);
+		
+	assert(configRef != nullptr);
+	this->icon = new QuickOpenTaskbarIcon(*configRef);
+	// this->settingsWindow->Show();
+
+	return true;
+}
+
+void QuickOpenApplication::notifyUser(MessageSeverity severity, const wxString& title, const wxString& text)
+{
+	bool notificationShown = false;
+#if wxUSE_TASKBARICON_BALLOONS
+	notificationShown = this->icon->ShowBalloon(title, text, 0, wxICON_INFORMATION);
+#endif
+
+	if(!notificationShown)
+	{
+		auto notifyWindow = new NotificationWindow(nullptr, severity, text, title, [this]
+		{
+			this->getTrayWindow()->showAtCursor();
+		});
+		notifyWindow->Show();
+		notifyWindow->RequestUserAttention();
+	}
+}
+
+void QuickOpenApplication::setupServer(unsigned newPort)
+{
+	server = std::make_unique<QuickOpenWebServer>(configRef, *this, newPort);
+}
+
+bool QuickOpenApplication::promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested)
+{
+	auto messageBoxLambda = [URL, &requesterName, &banRequested] {
+		auto dialog = WebpageOpenConsentDialog(URL, requesterName);
+		dialog.RequestUserAttention();
+		auto result = static_cast<ConsentDialog::ResultCode>(dialog.ShowModal());
+		banRequested = dialog.denyFutureRequestsRequested();
+		return result;
+		// return wxMessageBox(wxT("Do you want to open the following webpage?\n") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
+	};
+
+	auto response = wxCallAfterSync<QuickOpenApplication, decltype(messageBoxLambda), ConsentDialog::ResultCode>(*this, messageBoxLambda);
+	return (response == ConsentDialog::ACCEPT);
+}
+
+std::pair<ConsentDialog::ResultCode, bool> QuickOpenApplication::promptForFileSave(const wxFileName& defaultDestDir,
+	const wxString& requesterName, FileConsentRequestInfo& rqFileInfo)
+{
+	auto dlgLambda = [this, &defaultDestDir, &requesterName, &rqFileInfo]
+	{
+		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo, this->configRef, requesterName);
+		consentDlg.Show();
+		consentDlg.RequestUserAttention();
+		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
+		std::vector<wxFileName> consentedFileNames = consentDlg.getConsentedFilenames();
+
+		for (size_t i = 0; i < consentedFileNames.size(); ++i)
+		{
+			rqFileInfo.fileList[i].consentedFileName = consentedFileNames[i];
+		}
+
+		return std::pair{ resultVal, consentDlg.denyFutureRequestsRequested() };
+	};
+
+	if (wxIsMainThread())
+	{
+		return dlgLambda();
+	}
+	else
+	{
+		return wxCallAfterSync<decltype(*this), decltype(dlgLambda), std::pair<ConsentDialog::ResultCode, bool>>(*this, dlgLambda);
+	}
+}
+
+int QuickOpenApplication::OnExit()
+{
+	if (this->icon != nullptr)
+	{
+		this->icon->RemoveIcon();
+		this->icon->Destroy();
+		this->icon = nullptr;
+	}
+
+	mg_exit_library();
+
+	return 0;
+}
+
 wxBEGIN_EVENT_TABLE(QuickOpenTaskbarIcon::TaskbarMenu, wxMenu)
-    EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::STATUS, QuickOpenTaskbarIcon::TaskbarMenu::OnStatusItemSelected)
+	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::STATUS, QuickOpenTaskbarIcon::TaskbarMenu::OnStatusItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::CLIENT_PAGE, QuickOpenTaskbarIcon::TaskbarMenu::OnClientPageItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::SETTINGS, QuickOpenTaskbarIcon::TaskbarMenu::OnSettingsItemSelected)
     EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::ABOUT, QuickOpenTaskbarIcon::TaskbarMenu::OnAboutItemSelected)

@@ -145,6 +145,7 @@ inline int mg_read(struct mg_connection* conn, void *buf, size_t len)
 {
 	size_t bytesToRead = len > conn->inputBuffer.size() ? conn->inputBuffer.size() : len;
 	std::memcpy(buf, conn->inputBuffer.c_str(), bytesToRead);
+	conn->inputBuffer = conn->inputBuffer.substr(bytesToRead);
 	return bytesToRead;
 }
 

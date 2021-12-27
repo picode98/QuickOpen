@@ -193,7 +193,7 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 
 				if (!thisIPBanned)
 				{
-					openAllowed = promptForWebpageOpen(wxAppRef, url, wxT("the IP address ") + senderIP, banRequested);
+					openAllowed = wxAppRef.promptForWebpageOpen(url, wxT("the IP address ") + senderIP, banRequested);
 				}
 
 				if(thisIPBanned || banRequested)
@@ -256,6 +256,7 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 
 
 				mg_send_http_ok(conn, "text/plain", 0);
+				mg_close_connection(conn);
 			}
 			else
 			{
@@ -326,22 +327,6 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	wxString remoteIP = mg_get_request_info(conn)->remote_addr;
 
-	auto consentDlgLambda = [this, &defaultDestDir, &rqFileInfo, &remoteIP]
-	{
-		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo, this->configLock, wxT("the remote IP ") + remoteIP);
-		consentDlg.Show();
-		consentDlg.RequestUserAttention();
-		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
-		std::vector<wxFileName> consentedFileNames = consentDlg.getConsentedFilenames();
-
-		for(size_t i = 0; i < consentedFileNames.size(); ++i)
-		{
-			rqFileInfo.fileList[i].consentedFileName = consentedFileNames[i];
-		}
-
-		return std::pair{ resultVal, consentDlg.denyFutureRequestsRequested() };
-	};
-
 	FileOpenSaveConsentDialog::ResultCode result;
 	bool denyFuture = false;
 	{
@@ -355,9 +340,7 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 		if (!thisIPBanned)
 		{
-			std::tie(result, denyFuture) = wxCallAfterSync<QuickOpenApplication, decltype(consentDlgLambda),
-				std::pair<FileOpenSaveConsentDialog::ResultCode, bool>>(
-					wxAppRef, consentDlgLambda);
+			std::tie(result, denyFuture) = wxAppRef.promptForFileSave(defaultDestDir, wxT("the IP address ") + remoteIP, rqFileInfo);
 
 			if(denyFuture)
 			{
@@ -700,4 +683,24 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 	delete[] bodyBuffer;
 	outFile.close();
 	return true;*/
+}
+
+QuickOpenWebServer::QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock,
+	QuickOpenApplication& wxAppRef, unsigned port):
+	CivetServer({
+		"document_root", STATIC_PATH.generic_string(),
+		"listening_ports", '+' + std::to_string(port)
+	}),
+	wxAppRef(wxAppRef),
+	wrLock(wrLock),
+	staticHandler("/"),
+	webpageAPIEndpoint(wrLock, wxAppRef, consentDialogMutex, bannedIPs),
+	fileConsentTokenService(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
+	fileAPIEndpoint(fileConsentTokenService, wxAppRef),
+	bannedIPs(std::make_unique<std::set<wxString>>())
+{
+	this->addHandler("/", staticHandler);
+	this->addHandler("/api/openWebpage", webpageAPIEndpoint);
+	this->addHandler("/api/openSaveFile", fileAPIEndpoint);
+	this->addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);
 }

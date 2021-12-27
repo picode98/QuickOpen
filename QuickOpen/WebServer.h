@@ -7,7 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
-// #include "AppGUI.h"
+#include "AppGUI.h"
 #include "TrayStatusWindow.h"
 #include "AppConfig.h"
 #include "Utils.h"
@@ -79,18 +79,6 @@ struct FormErrorList
 
 void sendJSONResponse(mg_connection* conn, int status, const nlohmann::json& json);
 
-class TestHandler : public CivetHandler
-{
-	bool handleGet(CivetServer* server, mg_connection* conn) override
-	{
-		std::string content = "This is a test.";
-		mg_send_http_ok(conn, "text/plain", content.size());
-		mg_write(conn, content.c_str(), content.size());
-
-		return true;
-	}
-};
-
 class StaticHandler : public CivetHandler
 {
 private:
@@ -105,16 +93,17 @@ public:
 
 class OpenWebpageAPIEndpoint : public CivetHandler
 {
+	IQuickOpenApplication& wxAppRef;
 	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
-	QuickOpenApplication& wxAppRef;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
+	// IQuickOpenApplication 
 
 public:
-	OpenWebpageAPIEndpoint(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, QuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef):
+	OpenWebpageAPIEndpoint(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, IQuickOpenApplication& wxAppRef, std::mutex& consentDialogMutex, WriterReadersLock<std::set<wxString>>& bannedIPRef):
 		configLock(configLock),
-		consentDialogMutex(consentDialogMutex),
 		wxAppRef(wxAppRef),
+		consentDialogMutex(consentDialogMutex),
 		bannedIPRef(bannedIPRef)
 	{}
 
@@ -164,12 +153,12 @@ public:
 private:
 	// TokenMap tokens;
 	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
-	QuickOpenApplication& wxAppRef;
+	IQuickOpenApplication& wxAppRef;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 
 public:
-	FileConsentTokenService(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, QuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
+	FileConsentTokenService(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, IQuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
 		tokenWRRef(std::make_unique<TokenMap>()), configLock(configLock),
 		consentDialogMutex(consentDialogMutex),
 		wxAppRef(wxAppRef),
@@ -220,35 +209,21 @@ public:
 
 class QuickOpenWebServer : public CivetServer
 {
+	QuickOpenApplication& wxAppRef;
+
 	std::shared_ptr<WriterReadersLock<AppConfig>> wrLock;
 	std::mutex consentDialogMutex;
 
 	WriterReadersLock<std::set<wxString>> bannedIPs;
 
-	TestHandler testHandler;
 	StaticHandler staticHandler;
 	OpenWebpageAPIEndpoint webpageAPIEndpoint;
 	FileConsentTokenService fileConsentTokenService;
 	OpenSaveFileAPIEndpoint fileAPIEndpoint;
+
+	void onWebpageOpened(const wxString& url);
 public:
-	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef, unsigned port):
-		CivetServer({
-			"document_root", STATIC_PATH.generic_string(),
-			"listening_ports", '+' + std::to_string(port)
-		}),
-		wrLock(wrLock),
-		staticHandler("/"),
-		webpageAPIEndpoint(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
-		fileConsentTokenService(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
-		fileAPIEndpoint(fileConsentTokenService, wxAppRef),
-		bannedIPs(std::make_unique<std::set<wxString>>())
-	{
-		this->addHandler("/test", testHandler);
-		this->addHandler("/", staticHandler);
-		this->addHandler("/api/openWebpage", webpageAPIEndpoint);
-		this->addHandler("/api/openSaveFile", fileAPIEndpoint);
-		this->addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);
-	}
+	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef, unsigned port);
 
 	~QuickOpenWebServer() override
 	{
