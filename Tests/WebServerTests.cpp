@@ -203,6 +203,8 @@ TEST_CASE("OpenWebpageAPIEndpoint tests")
 
 TEST_CASE("FileConsentTokenService tests")
 {
+	const std::string testFileInfo = R"eos({"fileList": [{"filename": "test.txt", "fileSize": 2000}, {"filename": "anotherFile.zip", "fileSize": 2500700853}]})eos";
+
 	CivetServer testServer({});
 	auto configLock = std::make_shared<WriterReadersLock<AppConfig>>(std::make_unique<AppConfig>());
 	auto bannedSetLock = WriterReadersLock(std::make_unique<std::set<wxString>>());
@@ -215,7 +217,7 @@ TEST_CASE("FileConsentTokenService tests")
 		auto wxTestApp = MockGUIApp(true, false);
 		FileConsentTokenService endpoint(configLock, dlgMutex, wxTestApp, bannedSetLock);
 
-		testConn.inputBuffer = R"eos({"fileList": [{"filename": "test.txt", "fileSize": 2000}, {"filename": "anotherFile.zip", "fileSize": 2500700853}]})eos";
+		testConn.inputBuffer = testFileInfo;
 		auto jsonInput = nlohmann::json::parse(testConn.inputBuffer);
 
 		REQUIRE(endpoint.handlePost(&testServer, &testConn));
@@ -235,5 +237,60 @@ TEST_CASE("FileConsentTokenService tests")
 		REQUIRE(tokenMap->at(tokenVal).at(1).fileSize == 2500700853);
 
 		REQUIRE(wxTestApp.promptedForFileSave);
+	}
+	SECTION("unhappy path - request denied")
+	{
+		auto wxTestApp = MockGUIApp(false, false);
+		FileConsentTokenService endpoint(configLock, dlgMutex, wxTestApp, bannedSetLock);
+
+		testConn.inputBuffer = testFileInfo;
+		auto jsonInput = nlohmann::json::parse(testConn.inputBuffer);
+
+		REQUIRE(endpoint.handlePost(&testServer, &testConn));
+		REQUIRE(testConn.inputBuffer.empty());
+		REQUIRE(testConn.responseStatus == 403);
+		REQUIRE(!testConn.isOpen);
+
+		REQUIRE(decltype(bannedSetLock)::ReadableReference(bannedSetLock)->empty());
+
+		REQUIRE(endpoint.tokenWRRef.obj->empty());
+
+		REQUIRE(wxTestApp.promptedForFileSave);
+	}
+	SECTION("unhappy path - request denied and user banned")
+	{
+		auto wxTestApp = MockGUIApp(false, true);
+		FileConsentTokenService endpoint(configLock, dlgMutex, wxTestApp, bannedSetLock);
+
+		testConn.inputBuffer = testFileInfo;
+		auto jsonInput = nlohmann::json::parse(testConn.inputBuffer);
+
+		REQUIRE(endpoint.handlePost(&testServer, &testConn));
+		REQUIRE(testConn.inputBuffer.empty());
+		REQUIRE(testConn.responseStatus == 403);
+		REQUIRE(!testConn.isOpen);
+
+		REQUIRE(*bannedSetLock.obj.get() == std::set<wxString> { wxT("::1") });
+
+		REQUIRE(endpoint.tokenWRRef.obj->empty());
+
+		REQUIRE(wxTestApp.promptedForFileSave);
+
+		wxTestApp.requestBan = false;
+		wxTestApp.confirmPrompts = true;
+		wxTestApp.promptedForFileSave = false;
+
+		mg_connection testConn2;
+		testConn2.requestInfo = { "", "/api/saveFile", "::1" };
+		testConn2.inputBuffer = testFileInfo;
+
+		REQUIRE(endpoint.handlePost(&testServer, &testConn2));
+		REQUIRE(testConn.inputBuffer.empty());
+		REQUIRE(testConn.responseStatus == 403);
+		REQUIRE(!testConn.isOpen);
+
+		REQUIRE(!wxTestApp.promptedForFileSave);
+
+		REQUIRE(*bannedSetLock.obj.get() == std::set<wxString> { wxT("::1") });
 	}
 }
