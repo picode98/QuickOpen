@@ -65,6 +65,12 @@
     <ClInclude Include="MGMocks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ManagementServer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WebServerUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AppGUI.cpp">
@@ -86,6 +92,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PlatformUtils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="WebServerUtils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ManagementServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

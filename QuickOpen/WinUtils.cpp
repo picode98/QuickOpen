@@ -508,3 +508,86 @@ StartupEntryState getStartupEntryState()
 		}
 	}
 }
+
+void broadcastConfigUpdate()
+{
+	//DWORD bytesWritten;
+	//std::vector<DWORD> PIDs = retryUntilLargeEnough<DWORD>([&bytesWritten](std::vector<DWORD>& currentVec)
+	//{
+	//	EnumProcesses(currentVec.data(), currentVec.size() * sizeof(DWORD), &bytesWritten);
+	//	return bytesWritten < currentVec.size() * sizeof(DWORD);
+	//});
+	//PIDs.resize(bytesWritten / sizeof(DWORD));
+
+	//for(DWORD thisPID : PIDs)
+	//{
+	//	HANDLE procHandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, thisPID);
+	//	QueryFullProcessImageName(procHandle, PROCESS_NAME_NATIVE, )
+	//}
+	/*BOOL result = EnumWindows([](HWND hwnd, LPARAM lParam)
+	{
+		try
+		{
+			DWORD thisPID;
+			GetWindowThreadProcessId(hwnd, &thisPID);
+			HANDLE procHandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, thisPID);
+
+			DWORD bytesWritten;
+			std::vector<TCHAR> filenameBuf = retryUntilLargeEnough<TCHAR>([&procHandle, &bytesWritten](std::vector<TCHAR>& charBuf)
+			{
+				bytesWritten = charBuf.size();
+				if (QueryFullProcessImageName(procHandle, 0, charBuf.data(), &bytesWritten) == 0 && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+				{
+					handleWinAPIError(0);
+				}
+
+				return (bytesWritten + 1) <= charBuf.size();
+			});
+
+			auto procFilename = wxFileName(wxString(filenameBuf.data()));
+
+			if (procFilename == getAppExecutablePath())
+			{
+				tstring targetTitle = TEXT("Main Window");
+				std::vector<TCHAR> buf(targetTitle.size() + 1);
+
+				SendMessage(hwnd, WM_GETTEXT, buf.size(), reinterpret_cast<LPARAM>(buf.data()));
+
+				if (tstring(buf.data()) == targetTitle)
+				{
+					SendMessage(hwnd, winGetConfigUpdateMessageID(), 0, 0);
+					SetLastError(WINDOW_FOUND);
+				}
+			}
+		}
+		catch(const WindowsException& ex)
+		{
+			if(ex.code().value() != ERROR_ACCESS_DENIED)
+			{
+				throw;
+			}
+		}
+		return TRUE;
+
+	}, 0);
+
+	if (result == 0)
+	{
+		if (GetLastError() == WINDOW_FOUND)
+		{
+			return true;
+		}
+		else
+		{
+			handleWinAPIError(0);
+			return false;
+		}
+	}
+	else
+	{
+		return false;
+	}*/
+
+	SendMessage(HWND_BROADCAST, winGetConfigUpdateMessageID(), 0, 0);
+	handleWinAPIError(0);
+}

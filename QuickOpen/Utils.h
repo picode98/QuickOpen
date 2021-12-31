@@ -73,6 +73,11 @@ public:
 			owner.lockForWriting();
 		}
 
+		T& operator*() const
+		{
+			return *owner.obj.get();
+		}
+
 		T* operator->() const
 		{
 			return owner.obj.get();
@@ -92,6 +97,11 @@ public:
 		ReadableReference(WriterReadersLock& owner) : owner(owner)
 		{
 			owner.lockForReading();
+		}
+
+		const T& operator*() const
+		{
+			return *owner.obj.get();
 		}
 
 		const T* operator->() const

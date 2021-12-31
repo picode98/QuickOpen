@@ -40,8 +40,6 @@ typedef uint32_t ConsentToken;
 class TrayStatusWindow;
 class QuickOpenApplication;
 
-std::string URLDecode(const std::string& encodedStr, bool decodePlus);
-
 #ifdef _WIN32
 
 inline void openURL(const std::string& URL, const tstring& browserCommandLineFormat = getDefaultBrowserCommandLine())
@@ -57,27 +55,6 @@ inline void openURL(const std::string& URL, const tstring& browserCommandLineFor
 	startSubprocess(browserCommandLine);
 }
 #endif
-
-std::map<std::string, std::string> parseFormEncodedBody(mg_connection* conn);
-
-std::map<std::string, std::string> parseQueryString(mg_connection* conn);
-
-struct FormErrorList
-{
-	struct FormError
-	{
-		std::string fieldName,
-			errorString;
-		
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(FormError, fieldName, errorString)
-	};
-
-	std::vector<FormError> errors;
-
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(FormErrorList, errors)
-};
-
-void sendJSONResponse(mg_connection* conn, int status, const nlohmann::json& json);
 
 class StaticHandler : public CivetHandler
 {
@@ -222,8 +199,14 @@ class QuickOpenWebServer : public CivetServer
 	OpenSaveFileAPIEndpoint fileAPIEndpoint;
 
 	void onWebpageOpened(const wxString& url);
+	unsigned port;
 public:
 	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef, unsigned port);
+
+	unsigned getPort() const
+	{
+		return this->port;
+	}
 
 	~QuickOpenWebServer() override
 	{

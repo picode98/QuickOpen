@@ -1,6 +1,8 @@
-#include "AppGUI.h"
-
 #include "WebServer.h"
+
+#include <wx/cmdline.h>
+
+#include "AppGUI.h"
 
 wxIMPLEMENT_APP(QuickOpenApplication);
 
@@ -652,8 +654,33 @@ void QuickOpenTaskbarIcon::TaskbarMenu::OnAboutItemSelected(wxCommandEvent& even
 	wxAboutBox(aboutDialogInfo);
 }
 
+const std::vector<wxCmdLineEntryDesc> QuickOpenApplication::COMMAND_LINE_DESC = {
+	{ wxCMD_LINE_OPTION, nullptr, "set-default-upload-folder", "Updates the default upload folder", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_NONE }
+};
+
+void QuickOpenApplication::triggerConfigUpdate()
+{
+	unsigned newPort;
+	{
+		WriterReadersLock<AppConfig>::WritableReference configLock(*configRef);
+		*configLock = AppConfig::loadConfig();
+		newPort = configLock->serverPort;
+	}
+
+	if(newPort != server->getPort())
+	{
+		setupServer(newPort);
+	}
+}
+
 bool QuickOpenApplication::OnInit()
 {
+	singleInstanceChecker = std::make_unique<wxSingleInstanceChecker>(wxT("Single Instance Checker"),
+		(InstallationInfo::detectInstallation().configFolder / wxFileName(".", "run.lock")).GetFullPath());
+	if (!wxApp::OnInit()) return false;
+	// mainWindow = new MainWindow(*this);
+
 	this->SetAppName(wxT("QuickOpen"));
 	this->SetAppDisplayName(wxT("QuickOpen"));
 
@@ -668,13 +695,71 @@ bool QuickOpenApplication::OnInit()
 		std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::defaultConfigPath().GetFullPath() << "\"." << std::endl;
 	}
 
+	if(cliNewDefaultUploadFolder.has_value())
+	{
+		config->fileSavePath = cliNewDefaultUploadFolder.value();
+		config->saveConfig();
+	}
+
+	mg_init_library(0);
+
+	if (singleInstanceChecker->IsAnotherRunning())
+	{
+		ManagementClient::sendReload();
+		return false;
+	}
+
 	configRef = std::make_shared<WriterReadersLock<AppConfig>>(config);
 
 	setupServer(configRef->obj->serverPort);
+
+	unsigned attempts = 0;
+	while (true)
+	{
+		try
+		{
+			mgmtServer = std::make_unique<ManagementServer>(*this, generateCryptoRandomInteger<uint16_t>() % 32768 + 32768);
+			break;
+		}
+		catch (const CivetException& ex)
+		{
+			++attempts;
+
+			if (std::string(ex.what()).find("binding to port") == std::string::npos)
+			{
+				throw;
+			}
+			else if(attempts >= 100)
+			{
+				throw std::runtime_error("Could not find free port to bind management server");
+			}
+		}
+	}
 		
 	assert(configRef != nullptr);
 	this->icon = new QuickOpenTaskbarIcon(*configRef);
 	// this->settingsWindow->Show();
+	return true;
+}
+
+void QuickOpenApplication::OnInitCmdLine(wxCmdLineParser& parser)
+{
+	wxApp::OnInitCmdLine(parser);
+
+	parser.SetDesc(COMMAND_LINE_DESC.data());
+}
+
+bool QuickOpenApplication::OnCmdLineParsed(wxCmdLineParser& parser)
+{
+	wxApp::OnCmdLineParsed(parser);
+
+	wxString uploadFolder;
+	if (parser.Found(wxT("set-default-upload-folder"), &uploadFolder))
+	{
+		{
+			this->cliNewDefaultUploadFolder = wxFileName(uploadFolder, "");
+		}
+	}
 
 	return true;
 }

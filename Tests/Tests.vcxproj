@@ -144,6 +144,7 @@
     <ClCompile Include="..\QuickOpen\AppConfig.cpp" />
     <ClCompile Include="..\QuickOpen\AppGUI.cpp" />
     <ClCompile Include="..\QuickOpen\GUIUtils.cpp" />
+    <ClCompile Include="..\QuickOpen\ManagementServer.cpp" />
     <ClCompile Include="..\QuickOpen\PlatformUtils.cpp" />
     <ClCompile Include="..\QuickOpen\TrayStatusWindow.cpp" />
     <ClCompile Include="..\QuickOpen\Utils.cpp" />

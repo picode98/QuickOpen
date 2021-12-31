@@ -21,6 +21,8 @@
 #include <wx/clipbrd.h>
 #include <wx/statline.h>
 #include <wx/aboutdlg.h>
+#include <wx/snglinst.h>
+#include <wx/cmdline.h>
 //#include <wx/gauge.h>
 // #include <wx/scrolwin.h>
 
@@ -37,7 +39,9 @@
 #include <wx/url.h>
 
 #include "ApplicationInfo.h"
+#include "ManagementServer.h"
 #include "PlatformUtils.h"
+#include "WebServer.h"
 
 class QuickOpenWebServer;
 struct FileConsentRequestInfo;
@@ -367,6 +371,7 @@ public:
 	virtual void setupServer(unsigned newPort) = 0;
 	virtual bool promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested) = 0;
 	virtual std::pair<ConsentDialog::ResultCode, bool> promptForFileSave(const wxFileName& defaultDestDir, const wxString& requesterName, FileConsentRequestInfo& rqFileInfo) = 0;
+	virtual void triggerConfigUpdate() = 0;
 };
 
 class QuickOpenApplication : public IQuickOpenApplication
@@ -374,10 +379,41 @@ class QuickOpenApplication : public IQuickOpenApplication
 	std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
 	QuickOpenTaskbarIcon* icon = nullptr;
 	std::unique_ptr<QuickOpenWebServer> server;
+	std::unique_ptr<ManagementServer> mgmtServer;
+
+	std::unique_ptr<wxSingleInstanceChecker> singleInstanceChecker;
+
+	std::optional<wxFileName> cliNewDefaultUploadFolder;
 	// QuickOpenSettings* settingsWindow = nullptr;
 
+	//class MainWindow : public wxFrame
+	//{
+	//	QuickOpenApplication& wxAppRef;
+	//public:
+	//	MainWindow(QuickOpenApplication& wxAppRef): wxFrame(nullptr, wxID_ANY, wxT("Main Window")), wxAppRef(wxAppRef)
+	//	{}
+
+	//	WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override
+	//	{
+	//		if(nMsg == winGetConfigUpdateMessageID())
+	//		{
+	//			wxAppRef.triggerConfigUpdate();
+	//		}
+
+	//		return wxFrame::MSWWindowProc(nMsg, wParam, lParam);
+	//	}
+	//};
+
+	//MainWindow* mainWindow = nullptr;
+	static const std::vector<wxCmdLineEntryDesc> COMMAND_LINE_DESC;
 public:
+	void triggerConfigUpdate() override;
+
 	bool OnInit() override;
+
+	void OnInitCmdLine(wxCmdLineParser& parser) override;
+
+	bool OnCmdLineParsed(wxCmdLineParser& parser) override;
 
 	//void setConfigRef(WriterReadersLock<AppConfig>& configRef)
 	//{
