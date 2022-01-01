@@ -1,3 +1,4 @@
+#include "PlatformUtils.h"
 #include "WebServerUtils.h"
 
 #include <sstream>
@@ -145,5 +146,57 @@ bool requireParameter(mg_connection* conn, const std::map<std::string, std::stri
 	else
 	{
 		return true;
+	}
+}
+
+uint64_t CSRFAuthHandler::addToken(const std::string& ipAddress)
+{
+	auto tokenMapRef = decltype(tokenMap)::WritableReference(tokenMap);
+
+	uint64_t newToken = generateCryptoRandomInteger<uint64_t>();
+	tokenMapRef->insert({ ipAddress, newToken });
+	return newToken;
+}
+
+bool CSRFAuthHandler::authorize(CivetServer* server, mg_connection* conn)
+{
+	auto queryStringMap = parseQueryString(conn);
+	if (requireParameter(conn, queryStringMap, "csrfToken"))
+	{
+		bool tokenFound = false;
+		{
+			auto tokenMapRef = decltype(tokenMap)::ReadableReference(tokenMap);
+
+			char* endPtr;
+			uint64_t csrfToken = strtoull(queryStringMap["csrfToken"].c_str(), &endPtr, 10);
+			auto tokenMatchRange = tokenMapRef->equal_range(mg_get_request_info(conn)->remote_addr);
+			for (auto thisToken = tokenMatchRange.first; thisToken != tokenMatchRange.second; ++thisToken)
+			{
+				if (thisToken->second == csrfToken)
+				{
+					tokenFound = true;
+					break;
+				}
+			}
+		}
+
+		if (tokenFound)
+		{
+			return true;
+		}
+		else
+		{
+			auto jsonErrorInfo = nlohmann::json(FormErrorList{
+				{
+					{"csrfToken", "The authentication token supplied is not valid."}
+				}
+				});
+			sendJSONResponse(conn, 403, jsonErrorInfo);
+			return false;
+		}
+	}
+	else
+	{
+		return false; // requireParameter sent Bad Request
 	}
 }

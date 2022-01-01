@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <shared_mutex>
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <map>
@@ -335,4 +336,17 @@ inline std::string MGReadAll(mg_connection* conn)
 	}
 
 	return strBuilder.str();
+}
+
+inline std::string fileReadAll(const wxFileName& path)
+{
+	std::ifstream fileIn;
+	std::string fileStr;
+	fileIn.exceptions(std::ios::failbit);
+	fileIn.open(path.GetFullPath().ToStdWstring());
+	std::stringstream dataStream;
+	dataStream << fileIn.rdbuf();
+	fileIn.close();
+
+	return dataStream.str();
 }

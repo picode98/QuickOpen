@@ -61,9 +61,16 @@ class StaticHandler : public CivetHandler
 private:
 	const std::string staticPrefix;
     const wxFileName baseStaticPath;
+
+	CSRFAuthHandler* csrfHandler;
 public:
-	StaticHandler(const std::string& staticPrefix) : staticPrefix(staticPrefix), baseStaticPath(InstallationInfo::detectInstallation().dataFolder / wxFileName("static", ""))
+	StaticHandler(const std::string& staticPrefix, CSRFAuthHandler* csrfHandler = nullptr) : staticPrefix(staticPrefix),
+		baseStaticPath(InstallationInfo::detectInstallation().dataFolder / wxFileName("static", "")),
+		csrfHandler(csrfHandler)
 	{}
+
+	void sendProcessedPage(mg_connection* conn, const wxFileName& pagePath);
+	std::string resolveServerExpression(mg_connection* conn, const std::string& expr);
 
 	bool handleGet(CivetServer* server, mg_connection* conn) override;
 };
@@ -192,6 +199,8 @@ class QuickOpenWebServer : public CivetServer
 	std::mutex consentDialogMutex;
 
 	WriterReadersLock<std::set<wxString>> bannedIPs;
+
+	CSRFAuthHandler csrfHandler;
 
 	StaticHandler staticHandler;
 	OpenWebpageAPIEndpoint webpageAPIEndpoint;

@@ -25,14 +25,14 @@ TEST_CASE("StaticHandler class - happy path")
 
 	SECTION("happy path")
 	{
-		testConn.requestInfo = { "", "/static/page.html", "::1" };
+		testConn.requestInfo = { "", "/static/image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.size() == 1);
-		REQUIRE(wxFileName(testConn.sentFiles[0].first) == expectedStaticBase / wxFileName(".", "page.html"));
+		REQUIRE(wxFileName(testConn.sentFiles[0].first) == expectedStaticBase / wxFileName(".", "image.png"));
 	}
 	SECTION("unhappy path - path outside of static root")
 	{
-		testConn.requestInfo = { "", "/some_dir/page.html", "::1" };
+		testConn.requestInfo = { "", "/some_dir/image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.empty());
 		REQUIRE(testConn.responseStatus.has_value());
@@ -40,7 +40,7 @@ TEST_CASE("StaticHandler class - happy path")
 	}
 	SECTION("unhappy path - path with .. symbols")
 	{
-		testConn.requestInfo = { "", "/static/../page.html", "::1" };
+		testConn.requestInfo = { "", "/static/../image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.empty());
 		REQUIRE(testConn.responseStatus.has_value());
@@ -106,6 +106,12 @@ public:
 		{
 			return { ConsentDialog::ResultCode::DECLINE, requestBan };
 		}
+	}
+
+	bool configUpdateTriggered = false;
+	void triggerConfigUpdate() override
+	{
+		configUpdateTriggered = true;
 	}
 };
 

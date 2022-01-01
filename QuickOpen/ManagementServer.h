@@ -1,5 +1,6 @@
 #pragma once
 #include "AppConfig.h"
+#include "WebServerUtils.h"
 #include "CivetWebIncludes.h"
 
 class IQuickOpenApplication;
@@ -7,9 +8,9 @@ class IQuickOpenApplication;
 struct MgmtServerFileData
 {
 	unsigned port;
-	uint64_t authToken;
+	uint64_t csrfToken;
 
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(MgmtServerFileData, port, authToken)
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(MgmtServerFileData, port, csrfToken)
 };
 
 class ManagementServer : public CivetServer
@@ -26,19 +27,9 @@ public:
 		bool handlePost(CivetServer* server, mg_connection* conn) override;
 	};
 
-	class MgmtAuthHandler : public CivetAuthHandler
-	{
-		uint64_t authToken;
-		bool authorize(CivetServer* server, mg_connection* conn) override;
-	public:
-		MgmtAuthHandler(): authToken(generateCryptoRandomInteger<uint64_t>())
-		{}
-		constexpr uint64_t getAuthToken() const { return this->authToken; }
-	};
-
 private:
 	ConfigReloadHandler configReloadHandler;
-	MgmtAuthHandler authHandler;
+	CSRFAuthHandler authHandler;
 
 public:
 	ManagementServer(IQuickOpenApplication& appRef, unsigned port);

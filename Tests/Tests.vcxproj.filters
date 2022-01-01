@@ -51,5 +51,8 @@
     <ClCompile Include="..\QuickOpen\ManagementServer.cpp">
       <Filter>Source Files\QuickOpen References</Filter>
     </ClCompile>
+    <ClCompile Include="..\QuickOpen\WebServerUtils.cpp">
+      <Filter>Source Files\QuickOpen References</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

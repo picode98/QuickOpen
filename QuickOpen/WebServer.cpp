@@ -5,6 +5,57 @@
 
 #include <regex>
 
+std::string StaticHandler::resolveServerExpression(mg_connection* conn, const std::string& expr)
+{
+	if(expr == "CSRF_TOKEN")
+	{
+		if(this->csrfHandler != nullptr)
+		{
+			return std::to_string(this->csrfHandler->addToken(mg_get_request_info(conn)->remote_addr));
+		}
+		else
+		{
+			return "ERROR: No CSRF handler specified";
+		}
+	}
+	else
+	{
+		return "ERROR: Invalid server expression";
+	}
+}
+
+void StaticHandler::sendProcessedPage(mg_connection* conn, const wxFileName& pagePath)
+{
+	const std::regex serverExpressionRegex("\\[\\[(.*)\\]\\]");
+
+	try
+	{
+		std::string pageString = fileReadAll(pagePath);
+		std::stringstream processedStream;
+
+		auto it = std::sregex_iterator(pageString.begin(), pageString.end(), serverExpressionRegex);
+
+		long long lastEndIndex = 0;
+		for(; it != std::sregex_iterator(); ++it)
+		{
+			processedStream << std::string_view(pageString.c_str() + lastEndIndex, it->position() - lastEndIndex)
+							<< resolveServerExpression(conn, (*it)[1]);
+
+			lastEndIndex = it->position() + it->length();
+		}
+
+		processedStream << std::string_view(pageString.c_str() + lastEndIndex, pageString.size() - lastEndIndex);
+
+		std::string processedStr = processedStream.str();
+		mg_send_http_ok(conn, "text/html", processedStr.size());
+		mg_write(conn, processedStr.c_str(), processedStr.size());
+	}
+	catch (const std::ios::failure&)
+	{
+		mg_send_http_error(conn, 404, "The requested file was not found.");
+	}
+}
+
 bool StaticHandler::handleGet(CivetServer* server, mg_connection* conn)
 {
 	const mg_request_info* rqInfo = mg_get_request_info(conn);
@@ -24,15 +75,20 @@ bool StaticHandler::handleGet(CivetServer* server, mg_connection* conn)
 		{
 			if (!resolvedPath.HasName())
 			{
-				resolvedPath.SetName("index.html");
+				resolvedPath.SetName("index");
 			}
-			else
-			{
-				resolvedPath.SetName("html");
-			}
+
+			resolvedPath.SetExt("html");
 		}
 
-		mg_send_mime_file(conn, resolvedPath.GetFullPath().c_str(), nullptr);
+		if(resolvedPath.GetExt() == "html")
+		{
+			this->sendProcessedPage(conn, resolvedPath);
+		}
+		else
+		{
+			mg_send_mime_file(conn, resolvedPath.GetFullPath().c_str(), nullptr);
+		}
 	}
 	else
 	{
@@ -565,7 +621,7 @@ QuickOpenWebServer::QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<A
 	}),
 	wxAppRef(wxAppRef),
 	wrLock(wrLock),
-	staticHandler("/"),
+	staticHandler("/", &this->csrfHandler),
 	webpageAPIEndpoint(wrLock, wxAppRef, consentDialogMutex, bannedIPs),
 	fileConsentTokenService(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
 	fileAPIEndpoint(fileConsentTokenService, wxAppRef),
@@ -573,6 +629,7 @@ QuickOpenWebServer::QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<A
 	port(port)
 {
 	this->addHandler("/", staticHandler);
+	this->addAuthHandler("/api/", this->csrfHandler);
 	this->addHandler("/api/openWebpage", webpageAPIEndpoint);
 	this->addHandler("/api/openSaveFile", fileAPIEndpoint);
 	this->addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);

@@ -33,7 +33,10 @@
     <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.js"></script>
     <script type="text/javascript" src="file_picker.js"></script>
     <script type="text/javascript">
-        $(() => {
+        $(() =>
+        {
+            const CSRF_TOKEN = "[[CSRF_TOKEN]]";
+
             function resetFormErrors(formElement)
             {
                 $(formElement).find('*').removeClass('form-error');
@@ -56,7 +59,7 @@
             function uploadFile(fileList, consentToken, index)
             {
                 $.post({
-                    url: '/api/openSaveFile?consentToken=' + consentToken + '&fileIndex=' + index,
+                    url: `/api/openSaveFile?csrfToken=${CSRF_TOKEN}&consentToken=${consentToken}&fileIndex=${index}`,
                     data: fileList[index],
                     contentType: 'application/octet-stream',
                     processData: false,
@@ -116,7 +119,7 @@
 
                 resetFormErrors($('#open-webpage-form'));
 
-                $.post('/api/openWebpage', { url: $('#url-text-input').val() }).done(() => {
+                $.post('/api/openWebpage?csrfToken=' + CSRF_TOKEN, { url: $('#url-text-input').val() }).done(() => {
                     $('#open-webpage-result-text').text('Webpage opened successfully.');
                 }).fail((jqXHR, textStatus, errorThrown) =>
                 {
@@ -137,7 +140,7 @@
                 // let formData = new FormData($('#open-save-file-form')[0]);
                 let files = $('#file-upload-input').multiFilePicker('getFiles');
                 $.post({
-                    url: '/api/openSaveFile/getConsent',
+                    url: '/api/openSaveFile/getConsent?csrfToken=' + CSRF_TOKEN,
                     data: JSON.stringify({ fileList: files.map(thisFile => { return { "filename": thisFile.name, "fileSize": thisFile.size } }) }),
                     contentType: 'application/json'
                 }).done(data =>
