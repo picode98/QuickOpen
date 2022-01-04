@@ -119,6 +119,7 @@ QuickOpenSettings::
 QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxID_ANY, wxT("Settings")),
                                                             configRef(configRef)
 {
+	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
 	WriterReadersLock<AppConfig>::ReadableReference config(configRef);
 
 #ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
@@ -440,6 +441,8 @@ void QuickOpenSettings::updateSaveFolderEnabledState()
 ConsentDialog::ConsentDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxString& requesterName): wxDialog(parent, id, title, wxDefaultPosition, wxDefaultSize,
                                                                                                                               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
+	this->SetIcon(wxIcon(getAppIconPath().GetFullPath()));
+
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
 	topLevelSizer->Add(content = new wxWindow(this, wxID_ANY), wxSizerFlags(1).Expand());
 
@@ -756,9 +759,9 @@ bool QuickOpenApplication::OnCmdLineParsed(wxCmdLineParser& parser)
 	wxString uploadFolder;
 	if (parser.Found(wxT("set-default-upload-folder"), &uploadFolder))
 	{
-		{
-			this->cliNewDefaultUploadFolder = wxFileName(uploadFolder, "");
-		}
+		if (uploadFolder.EndsWith(">")) uploadFolder.RemoveLast(1); // Allow a trailing > to prevent issues with quoting file paths that end with
+																			// a backslash (e.g. "C:\" escapes the ending quote).
+		this->cliNewDefaultUploadFolder = wxFileName(uploadFolder, "");
 	}
 
 	return true;

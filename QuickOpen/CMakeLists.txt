@@ -9,7 +9,7 @@ add_compile_definitions(QUICKOPEN_WINDOWS_PRODUCT_GUID="${thisBuildUUID}")
 
 # Add source to this project's executable.
 # add_executable (QuickOpen "QuickOpen.cpp" "QuickOpen.h")
-add_executable(QuickOpenExecutable WIN32 "AppConfig.cpp" "AppGUI.cpp" "GUIUtils.cpp" "TrayStatusWindow.cpp" "Utils.cpp" "WebServer.cpp" "PlatformUtils.cpp")
+add_executable(QuickOpenExecutable WIN32 "AppConfig.cpp" "AppGUI.cpp" "GUIUtils.cpp" "TrayStatusWindow.cpp" "Utils.cpp" "WebServer.cpp" "WebServerUtils.cpp" "ManagementServer.cpp" "PlatformUtils.cpp")
 set_property(TARGET QuickOpenExecutable PROPERTY OUTPUT_NAME QuickOpen)
 
 apply_QuickOpen_build_settings(QuickOpenExecutable)

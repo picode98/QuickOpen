@@ -5,6 +5,7 @@
 #include <wx/url.h>
 
 #include "AppConfig.h"
+#include "AppGUI.h"
 #include "GUIUtils.h"
 #include "PlatformUtils.h"
 
@@ -56,6 +57,8 @@ TrayStatusWindow::TrayStatusWindow(WriterReadersLock<AppConfig>& configRef) : wx
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
 		wxMINIMIZE_BOX | wxMAXIMIZE_BOX)), configRef(configRef)
 {
+	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
+
 	topLevelPanel = new wxPanel(this);
 	auto* panelSizer = new wxBoxSizer(wxVERTICAL);
 	panelSizer->Add(topLevelPanel, wxSizerFlags(1).Expand());

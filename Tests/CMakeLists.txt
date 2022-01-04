@@ -4,7 +4,7 @@ include("../QuickOpenBuildSettings.cmake")
 
 
 add_executable(test_driver TestMain.cpp UtilsTests.cpp WebServerTests.cpp
-"../QuickOpen/AppConfig.cpp" "../QuickOpen/AppGUI.cpp" "../QuickOpen/GUIUtils.cpp" "../QuickOpen/TrayStatusWindow.cpp" "../QuickOpen/Utils.cpp" "../QuickOpen/WebServer.cpp" "../QuickOpen/PlatformUtils.cpp")
+"../QuickOpen/AppConfig.cpp" "../QuickOpen/AppGUI.cpp" "../QuickOpen/GUIUtils.cpp" "../QuickOpen/TrayStatusWindow.cpp" "../QuickOpen/Utils.cpp" "../QuickOpen/WebServerUtils.cpp" "../QuickOpen/WebServer.cpp" "../QuickOpen/ManagementServer.cpp" "../QuickOpen/PlatformUtils.cpp")
 target_include_directories(test_driver PRIVATE "../QuickOpen")
 set_property(TARGET test_driver PROPERTY COMPILE_DEFINITIONS "MOCK_CIVETWEB=1")
 

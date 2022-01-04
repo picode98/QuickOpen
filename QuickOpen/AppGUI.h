@@ -117,7 +117,7 @@ ResultType wxCallAfterSync(AppType& app, FuncType func)
 
 inline wxFileName getAppIconPath()
 {
-	return InstallationInfo::detectInstallation().dataFolder / wxFileName(".", "test_icon.ico");
+	return InstallationInfo::detectInstallation().dataFolder / wxFileName("./static", "favicon.ico");
 }
 
 class QuickOpenSettings : public wxFrame
@@ -333,6 +333,7 @@ public:
 	NotificationWindow(wxWindow *parent, MessageSeverity severity, const wxString& message, const wxString& caption, std::function<void()> moreInfoCallback)
 		: wxGenericMessageDialog(parent, message, caption, wxYES_NO | getMessageSeverityIconStyle(severity)), moreInfoCallback(moreInfoCallback)
 	{
+		this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
 		this->SetYesNoLabels(wxID_OK, wxT("More Information"));
 	}
 
