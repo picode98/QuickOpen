@@ -20,7 +20,7 @@ namespace SettingRetrieval
     {
         try
         {
-            destination = config.at(key);
+            destination = static_cast<const T&>(config.at(key));
             return true;
         }
         catch (const nlohmann::json::out_of_range&)

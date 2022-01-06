@@ -29,7 +29,7 @@ void TrayStatusWindow::OnShow(wxShowEvent& event)
 	if (event.IsShown())
 	{
 		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
-			WriterReadersLock<AppConfig>::ReadableReference(configRef)->serverPort);
+			WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort);
 		bool replaced = topLevelSizer->Replace(URLDisplay, newDisplay);
 		assert(replaced);
 		topLevelPanel->RemoveChild(URLDisplay);
@@ -52,10 +52,10 @@ void TrayStatusWindow::fitActivityListWidth()
 	}
 }
 
-TrayStatusWindow::TrayStatusWindow(WriterReadersLock<AppConfig>& configRef) : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
+TrayStatusWindow::TrayStatusWindow(IQuickOpenApplication& appRef) : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
 	wxSize(300, 300),
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
-		wxMINIMIZE_BOX | wxMAXIMIZE_BOX)), configRef(configRef)
+		wxMINIMIZE_BOX | wxMAXIMIZE_BOX)), appRef(appRef)
 {
 	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
 
@@ -65,7 +65,7 @@ TrayStatusWindow::TrayStatusWindow(WriterReadersLock<AppConfig>& configRef) : wx
 
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
 	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
-		WriterReadersLock<AppConfig>::ReadableReference(configRef)->serverPort), wxSizerFlags(0).Expand());
+		WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort), wxSizerFlags(0).Expand());
 	topLevelSizer->Add(activityList = new ActivityList(topLevelPanel), wxSizerFlags(1).Expand());
 	setSizerWithPadding(topLevelPanel, topLevelSizer);
 	topLevelPanel->Fit();

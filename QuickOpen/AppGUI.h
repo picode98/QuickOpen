@@ -35,6 +35,7 @@
 #include "GUIUtils.h"
 #include "Utils.h"
 #include <atomic>
+#include <condition_variable>
 #include "CivetWebIncludes.h"
 #include <wx/url.h>
 
@@ -146,10 +147,10 @@ class QuickOpenSettings : public wxFrame
 	wxButton* cancelButton;
 	wxButton* saveButton;
 
-	WriterReadersLock<AppConfig>& configRef;
+    IQuickOpenApplication& appRef;
 
 public:
-	QuickOpenSettings(WriterReadersLock<AppConfig>& configRef);
+	QuickOpenSettings(IQuickOpenApplication& appRef);
 
 	void OnSaveButton(wxCommandEvent& event);
 
@@ -248,12 +249,12 @@ public:
 
 class QuickOpenTaskbarIcon : public wxTaskBarIcon
 {
-	WriterReadersLock<AppConfig>& configRef;
+    IQuickOpenApplication& appRef;
 	TrayStatusWindow* statusWindow = nullptr;
 	
 	class TaskbarMenu : public wxMenu
 	{
-		WriterReadersLock<AppConfig>& configRef;
+        IQuickOpenApplication& appRef;
         TrayStatusWindow* statusWindow = nullptr;
 		
 	public:
@@ -266,7 +267,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 			EXIT
 		};
 
-		TaskbarMenu(WriterReadersLock<AppConfig>& configRef, TrayStatusWindow* statusWindow);
+		TaskbarMenu(IQuickOpenApplication& appRef, TrayStatusWindow* statusWindow);
 
         void OnStatusItemSelected(wxCommandEvent& event)
         {
@@ -277,7 +278,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 
 		void OnSettingsItemSelected(wxCommandEvent& event)
 		{
-			(new QuickOpenSettings(this->configRef))->Show();
+			(new QuickOpenSettings(this->appRef))->Show();
 		}
 
         void OnAboutItemSelected(wxCommandEvent& event);
@@ -292,7 +293,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 
 	wxMenu* CreatePopupMenu() override
 	{
-		return new TaskbarMenu(this->configRef, this->statusWindow);
+		return new TaskbarMenu(this->appRef, this->statusWindow);
 	}
 
 	//void focusTimerFunction(wxTimerEvent& timerEvent)
@@ -310,12 +311,12 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 	}
 
 public:
-	QuickOpenTaskbarIcon(WriterReadersLock<AppConfig>& configRef) : configRef(configRef)
+	QuickOpenTaskbarIcon(IQuickOpenApplication& appRef) : appRef(appRef)
 	{
 		this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO), wxT("QuickOpen"));
 		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
 
-		this->statusWindow = new TrayStatusWindow(configRef);
+		this->statusWindow = new TrayStatusWindow(appRef);
 	}
 
 	TrayStatusWindow* getTrayWindow() const
@@ -372,72 +373,6 @@ public:
 	virtual void setupServer(unsigned newPort) = 0;
 	virtual bool promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested) = 0;
 	virtual std::pair<ConsentDialog::ResultCode, bool> promptForFileSave(const wxFileName& defaultDestDir, const wxString& requesterName, FileConsentRequestInfo& rqFileInfo) = 0;
-	virtual void triggerConfigUpdate() = 0;
-};
-
-class QuickOpenApplication : public IQuickOpenApplication
-{
-	std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
-	QuickOpenTaskbarIcon* icon = nullptr;
-	std::unique_ptr<QuickOpenWebServer> server;
-	std::unique_ptr<ManagementServer> mgmtServer;
-
-	std::unique_ptr<wxSingleInstanceChecker> singleInstanceChecker;
-
-	std::optional<wxFileName> cliNewDefaultUploadFolder;
-	// QuickOpenSettings* settingsWindow = nullptr;
-
-	//class MainWindow : public wxFrame
-	//{
-	//	QuickOpenApplication& wxAppRef;
-	//public:
-	//	MainWindow(QuickOpenApplication& wxAppRef): wxFrame(nullptr, wxID_ANY, wxT("Main Window")), wxAppRef(wxAppRef)
-	//	{}
-
-	//	WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override
-	//	{
-	//		if(nMsg == winGetConfigUpdateMessageID())
-	//		{
-	//			wxAppRef.triggerConfigUpdate();
-	//		}
-
-	//		return wxFrame::MSWWindowProc(nMsg, wParam, lParam);
-	//	}
-	//};
-
-	//MainWindow* mainWindow = nullptr;
-	static const std::vector<wxCmdLineEntryDesc> COMMAND_LINE_DESC;
-public:
-	void triggerConfigUpdate() override;
-
-	bool OnInit() override;
-
-	void OnInitCmdLine(wxCmdLineParser& parser) override;
-
-	bool OnCmdLineParsed(wxCmdLineParser& parser) override;
-
-	//void setConfigRef(WriterReadersLock<AppConfig>& configRef)
-	//{
-	//	this->configRef = &configRef;
-	//}
-
-	TrayStatusWindow* getTrayWindow() const override
-	{
-		return this->icon->getTrayWindow();
-	}
-
-	QuickOpenTaskbarIcon* getTrayIcon() const override
-	{
-		return this->icon;
-	}
-
-	void notifyUser(MessageSeverity severity, const wxString& title, const wxString& text) override;
-
-	void setupServer(unsigned newPort) override;
-
-	bool promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested) override;
-
-	std::pair<ConsentDialog::ResultCode, bool> promptForFileSave(const wxFileName& defaultDestDir, const wxString& requesterName, FileConsentRequestInfo& rqFileInfo) override;
-
-	int OnExit() override;
+	virtual std::shared_ptr<WriterReadersLock<AppConfig>> getConfigRef() = 0;
+    virtual void triggerConfigUpdate() = 0;
 };

@@ -150,7 +150,7 @@ class WithStaticDefault
 {
 	std::optional<T> value;
 public:
-	static const T DEFAULT_VALUE = defaultValue;
+	static inline const T DEFAULT_VALUE = defaultValue;
 
 	WithStaticDefault() {}
 
@@ -343,7 +343,11 @@ inline std::string fileReadAll(const wxFileName& path)
 	std::ifstream fileIn;
 	std::string fileStr;
 	fileIn.exceptions(std::ios::failbit);
+#ifdef WIN32
 	fileIn.open(path.GetFullPath().ToStdWstring());
+#else
+    fileIn.open(path.GetFullPath().ToStdString());
+#endif
 	std::stringstream dataStream;
 	dataStream << fileIn.rdbuf();
 	fileIn.close();

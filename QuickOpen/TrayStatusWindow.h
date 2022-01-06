@@ -12,6 +12,7 @@
 #include "PlatformUtils.h"
 
 struct AppConfig;
+class IQuickOpenApplication;
 
 class TrayStatusWindow : public wxFrame
 {
@@ -124,7 +125,7 @@ public:
 		// wxDECLARE_EVENT_TABLE();
 	};
 private:
-	WriterReadersLock<AppConfig>& configRef;
+    IQuickOpenApplication& appRef;
 
 	wxPanel* topLevelPanel = nullptr;
 	wxBoxSizer* topLevelSizer = nullptr;
@@ -137,7 +138,7 @@ private:
 	void fitActivityListWidth();
 
 public:
-	TrayStatusWindow(WriterReadersLock<AppConfig>& configRef);
+	TrayStatusWindow(IQuickOpenApplication& appRef);
 
     void showAtCursor()
     {

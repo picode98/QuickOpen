@@ -152,7 +152,7 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 				wxString wxURL = wxString::FromUTF8(postParams["url"]);
 
 				{
-					WriterReadersLock<AppConfig>::ReadableReference readRef(*configLock);
+					WriterReadersLock<AppConfig>::ReadableReference readRef(*wxAppRef.getConfigRef());
 
 					if (readRef->browserID.empty())
 					{
@@ -238,7 +238,7 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	wxFileName defaultDestDir;
 	{
-		WriterReadersLock<AppConfig>::ReadableReference configRef(*configLock);
+		WriterReadersLock<AppConfig>::ReadableReference configRef(*wxAppRef.getConfigRef());
 		defaultDestDir = configRef->fileSavePath;
 	}
 
@@ -520,7 +520,7 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 	};
 
 	TrayStatusWindow::FileUploadActivityEntry* activityEntryRef =
-		wxCallAfterSync<QuickOpenApplication, decltype(createActivity), TrayStatusWindow::
+		wxCallAfterSync<IQuickOpenApplication, decltype(createActivity), TrayStatusWindow::
 		                FileUploadActivityEntry*>(progressReportingApp, createActivity);
 
 	try
@@ -586,7 +586,7 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 
 	if (allEnded)
 	{
-		QuickOpenApplication& appRef = this->progressReportingApp;
+		IQuickOpenApplication& appRef = this->progressReportingApp;
 		this->progressReportingApp.CallAfter([&appRef, fileCount]
 		{
 			appRef.notifyUser(MessageSeverity::MSG_INFO, wxT("File Upload Completed"),
@@ -613,17 +613,15 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 	return true;*/
 }
 
-QuickOpenWebServer::QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock,
-	QuickOpenApplication& wxAppRef, unsigned port):
+QuickOpenWebServer::QuickOpenWebServer(IQuickOpenApplication& wxAppRef, unsigned port):
 	CivetServer({
 		"document_root", STATIC_PATH.generic_string(),
 		"listening_ports", '+' + std::to_string(port)
 	}),
 	wxAppRef(wxAppRef),
-	wrLock(wrLock),
 	staticHandler("/", &this->csrfHandler),
-	webpageAPIEndpoint(wrLock, wxAppRef, consentDialogMutex, bannedIPs),
-	fileConsentTokenService(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
+	webpageAPIEndpoint(wxAppRef, consentDialogMutex, bannedIPs),
+	fileConsentTokenService(consentDialogMutex, wxAppRef, bannedIPs),
 	fileAPIEndpoint(fileConsentTokenService, wxAppRef),
 	bannedIPs(std::make_unique<std::set<wxString>>()),
 	port(port)

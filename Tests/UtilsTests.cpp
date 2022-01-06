@@ -3,7 +3,7 @@
 
 TEST_CASE("getDirName function")
 {
-	REQUIRE(getDirName(wxFileName("C:\\A\\test\\path\\with\\a", "file.txt")).GetFullPath() == wxString(wxT("C:\\A\\test\\path\\with\\a\\")));
+	REQUIRE(getDirName(wxFileName("C:\\A\\test\\path\\with\\a", "file.txt", wxPATH_WIN)).GetFullPath(wxPATH_WIN) == wxString(wxT("C:\\A\\test\\path\\with\\a\\")));
 	REQUIRE(getDirName(wxFileName("/a/test/path", "")) == wxFileName("/a/test/path", ""));
 }
 
@@ -22,8 +22,8 @@ TEST_CASE("WithStaticDefault class serialization")
 
 TEST_CASE("wxFileName operator/")
 {
-	REQUIRE(getDirName(wxFileName("C:\\A\\test\\path\\with\\a", "file.txt")) / wxFileName("./second/folder", "file2.txt")
-		== wxFileName("C:\\A\\test\\path\\with\\a\\second\\folder", "file2.txt"));
+	REQUIRE(getDirName(wxFileName("C:\\A\\test\\path\\with\\a", "file.txt", wxPATH_WIN)) / wxFileName("./second/folder", "file2.txt")
+		== wxFileName("C:\\A\\test\\path\\with\\a\\second\\folder", "file2.txt", wxPATH_WIN));
 }
 
 TEST_CASE("substituteFormatString function")
@@ -35,6 +35,6 @@ TEST_CASE("substituteFormatString function")
 TEST_CASE("startsWith function")
 {
 	REQUIRE(startsWith(std::string("A test string"), std::string("A te")));
-	REQUIRE(startsWith(wxFileName("C:\\A\\test\\path", "file.txt").GetDirs(), wxFileName("C:\\A", "").GetDirs()));
-	REQUIRE(!startsWith(wxFileName("C:\\A\\test\\path", "file.txt").GetDirs(), wxFileName("C:\\A\\te", "").GetDirs()));
+	REQUIRE(startsWith(wxFileName("C:\\A\\test\\path", "file.txt", wxPATH_WIN).GetDirs(), wxFileName("C:\\A", "", wxPATH_WIN).GetDirs()));
+	REQUIRE(!startsWith(wxFileName("C:\\A\\test\\path", "file.txt", wxPATH_WIN).GetDirs(), wxFileName("C:\\A\\te", "", wxPATH_WIN).GetDirs()));
 }

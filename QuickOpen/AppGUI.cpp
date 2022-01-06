@@ -4,8 +4,6 @@
 
 #include "AppGUI.h"
 
-wxIMPLEMENT_APP(QuickOpenApplication);
-
 wxBoxSizer* makeLabeledSizer(wxWindow* control, const wxString& labelText, wxWindow* parent, int spacing)
 {
 	auto sizer = new wxBoxSizer(wxHORIZONTAL);
@@ -116,11 +114,11 @@ bool FilePathValidator::Validate(wxWindow* parent)
 }
 
 QuickOpenSettings::
-QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxID_ANY, wxT("Settings")),
-                                                            configRef(configRef)
+QuickOpenSettings(IQuickOpenApplication& appRef): wxFrame(nullptr, wxID_ANY, wxT("Settings")),
+                                                            appRef(appRef)
 {
 	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
-	WriterReadersLock<AppConfig>::ReadableReference config(configRef);
+	WriterReadersLock<AppConfig>::ReadableReference config(*appRef.getConfigRef());
 
 #ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
 	StartupEntryState startupState = getStartupEntryState();
@@ -265,7 +263,7 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 
 	fileOpenSaveGroupSizer->Add(
 		makeLabeledSizer(serverPortCtrl = new wxSpinCtrl(topLevelPanel, wxID_ANY,
-									(config->serverPort.isSet() ? (wxString() << config->serverPort) : wxEmptyString), wxDefaultPosition,
+									(config->serverPort.isSet() ? (wxString() << config->serverPort) : wxString()), wxDefaultPosition,
 		                                wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535),
 		                 wxString(wxT("Server port (default: ")) << decltype(config->serverPort)::DEFAULT_VALUE << wxT(")"), topLevelPanel),
 		wxSizerFlags(0).Expand());
@@ -315,7 +313,7 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 {
 	if (this->Validate() && this->TransferDataFromWindow())
 	{
-		WriterReadersLock<AppConfig>::WritableReference config(this->configRef);
+		WriterReadersLock<AppConfig>::WritableReference config(*appRef.getConfigRef());
 
 		std::cout << "Saving settings." << std::endl;
 
@@ -353,7 +351,7 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 
 		if(oldServerPort.effectiveValue() != config->serverPort.effectiveValue())
 		{
-			wxGetApp().setupServer(config->serverPort);
+			this->appRef.setupServer(config->serverPort);
 		}
 
 		config->browserID = selectionIsInstalledBrowser
@@ -441,7 +439,7 @@ void QuickOpenSettings::updateSaveFolderEnabledState()
 ConsentDialog::ConsentDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxString& requesterName): wxDialog(parent, id, title, wxDefaultPosition, wxDefaultSize,
                                                                                                                               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-	this->SetIcon(wxIcon(getAppIconPath().GetFullPath()));
+	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
 
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
 	topLevelSizer->Add(content = new wxWindow(this, wxID_ANY), wxSizerFlags(1).Expand());
@@ -602,7 +600,7 @@ std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
 	}
 }
 
-QuickOpenTaskbarIcon::TaskbarMenu::TaskbarMenu(WriterReadersLock<AppConfig>& configRef, TrayStatusWindow* statusWindow): configRef(configRef),
+QuickOpenTaskbarIcon::TaskbarMenu::TaskbarMenu(IQuickOpenApplication& appRef, TrayStatusWindow* statusWindow): appRef(appRef),
 	statusWindow(statusWindow)
 {
 	this->Append(STATUS, wxT("Open Status"));
@@ -615,7 +613,7 @@ QuickOpenTaskbarIcon::TaskbarMenu::TaskbarMenu(WriterReadersLock<AppConfig>& con
 
 void QuickOpenTaskbarIcon::TaskbarMenu::OnClientPageItemSelected(wxCommandEvent& event)
 {
-	unsigned currentPort = WriterReadersLock<AppConfig>::ReadableReference(configRef)->serverPort;
+	unsigned currentPort = WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort;
 	openURL(std::string("http://localhost") + (currentPort != 80 ? ":" + std::to_string(currentPort) : ""));
 }
 
@@ -655,197 +653,6 @@ void QuickOpenTaskbarIcon::TaskbarMenu::OnAboutItemSelected(wxCommandEvent& even
 	// aboutDialogInfo.GetDescriptionAndCredits()
 
 	wxAboutBox(aboutDialogInfo);
-}
-
-const std::vector<wxCmdLineEntryDesc> QuickOpenApplication::COMMAND_LINE_DESC = {
-	{ wxCMD_LINE_OPTION, nullptr, "set-default-upload-folder", "Updates the default upload folder", wxCMD_LINE_VAL_STRING, 0 },
-	{ wxCMD_LINE_NONE }
-};
-
-void QuickOpenApplication::triggerConfigUpdate()
-{
-	unsigned newPort;
-	{
-		WriterReadersLock<AppConfig>::WritableReference configLock(*configRef);
-		*configLock = AppConfig::loadConfig();
-		newPort = configLock->serverPort;
-	}
-
-	if(newPort != server->getPort())
-	{
-		setupServer(newPort);
-	}
-}
-
-bool QuickOpenApplication::OnInit()
-{
-	singleInstanceChecker = std::make_unique<wxSingleInstanceChecker>(wxT("Single Instance Checker"),
-		(InstallationInfo::detectInstallation().configFolder / wxFileName(".", "run.lock")).GetFullPath());
-	if (!wxApp::OnInit()) return false;
-	// mainWindow = new MainWindow(*this);
-
-	this->SetAppName(wxT("QuickOpen"));
-	this->SetAppDisplayName(wxT("QuickOpen"));
-
-	std::unique_ptr<AppConfig> config = std::make_unique<AppConfig>();
-
-	try
-	{
-		*config = AppConfig::loadConfig();
-	}
-	catch (const std::ios_base::failure&)
-	{
-		std::cerr << "WARNING: Could not open configuration file \"" << AppConfig::defaultConfigPath().GetFullPath() << "\"." << std::endl;
-	}
-
-	if(cliNewDefaultUploadFolder.has_value())
-	{
-		config->fileSavePath = cliNewDefaultUploadFolder.value();
-		config->saveConfig();
-	}
-
-	mg_init_library(0);
-
-	if (singleInstanceChecker->IsAnotherRunning())
-	{
-		ManagementClient::sendReload();
-		return false;
-	}
-
-	configRef = std::make_shared<WriterReadersLock<AppConfig>>(config);
-
-	setupServer(configRef->obj->serverPort);
-
-	unsigned attempts = 0;
-	while (true)
-	{
-		try
-		{
-			mgmtServer = std::make_unique<ManagementServer>(*this, generateCryptoRandomInteger<uint16_t>() % 32768 + 32768);
-			break;
-		}
-		catch (const CivetException& ex)
-		{
-			++attempts;
-
-			if (std::string(ex.what()).find("binding to port") == std::string::npos)
-			{
-				throw;
-			}
-			else if(attempts >= 100)
-			{
-				throw std::runtime_error("Could not find free port to bind management server");
-			}
-		}
-	}
-		
-	assert(configRef != nullptr);
-	this->icon = new QuickOpenTaskbarIcon(*configRef);
-	// this->settingsWindow->Show();
-	return true;
-}
-
-void QuickOpenApplication::OnInitCmdLine(wxCmdLineParser& parser)
-{
-	wxApp::OnInitCmdLine(parser);
-
-	parser.SetDesc(COMMAND_LINE_DESC.data());
-}
-
-bool QuickOpenApplication::OnCmdLineParsed(wxCmdLineParser& parser)
-{
-	wxApp::OnCmdLineParsed(parser);
-
-	wxString uploadFolder;
-	if (parser.Found(wxT("set-default-upload-folder"), &uploadFolder))
-	{
-		if (uploadFolder.EndsWith(">")) uploadFolder.RemoveLast(1); // Allow a trailing > to prevent issues with quoting file paths that end with
-																			// a backslash (e.g. "C:\" escapes the ending quote).
-		this->cliNewDefaultUploadFolder = wxFileName(uploadFolder, "");
-	}
-
-	return true;
-}
-
-void QuickOpenApplication::notifyUser(MessageSeverity severity, const wxString& title, const wxString& text)
-{
-	bool notificationShown = false;
-#if wxUSE_TASKBARICON_BALLOONS
-	notificationShown = this->icon->ShowBalloon(title, text, 0, wxICON_INFORMATION);
-#endif
-
-	if(!notificationShown)
-	{
-		auto notifyWindow = new NotificationWindow(nullptr, severity, text, title, [this]
-		{
-			this->getTrayWindow()->showAtCursor();
-		});
-		notifyWindow->Show();
-		notifyWindow->RequestUserAttention();
-	}
-}
-
-void QuickOpenApplication::setupServer(unsigned newPort)
-{
-	server = std::make_unique<QuickOpenWebServer>(configRef, *this, newPort);
-}
-
-bool QuickOpenApplication::promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested)
-{
-	auto messageBoxLambda = [URL, &requesterName, &banRequested] {
-		auto dialog = WebpageOpenConsentDialog(URL, requesterName);
-		dialog.RequestUserAttention();
-		auto result = static_cast<ConsentDialog::ResultCode>(dialog.ShowModal());
-		banRequested = dialog.denyFutureRequestsRequested();
-		return result;
-		// return wxMessageBox(wxT("Do you want to open the following webpage?\n") + wxString::FromUTF8(URL), wxT("Webpage Open Request"), wxYES_NO);
-	};
-
-	auto response = wxCallAfterSync<QuickOpenApplication, decltype(messageBoxLambda), ConsentDialog::ResultCode>(*this, messageBoxLambda);
-	return (response == ConsentDialog::ACCEPT);
-}
-
-std::pair<ConsentDialog::ResultCode, bool> QuickOpenApplication::promptForFileSave(const wxFileName& defaultDestDir,
-	const wxString& requesterName, FileConsentRequestInfo& rqFileInfo)
-{
-	auto dlgLambda = [this, &defaultDestDir, &requesterName, &rqFileInfo]
-	{
-		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo, this->configRef, requesterName);
-		consentDlg.Show();
-		consentDlg.RequestUserAttention();
-		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
-		std::vector<wxFileName> consentedFileNames = consentDlg.getConsentedFilenames();
-
-		for (size_t i = 0; i < consentedFileNames.size(); ++i)
-		{
-			rqFileInfo.fileList[i].consentedFileName = consentedFileNames[i];
-		}
-
-		return std::pair{ resultVal, consentDlg.denyFutureRequestsRequested() };
-	};
-
-	if (wxIsMainThread())
-	{
-		return dlgLambda();
-	}
-	else
-	{
-		return wxCallAfterSync<decltype(*this), decltype(dlgLambda), std::pair<ConsentDialog::ResultCode, bool>>(*this, dlgLambda);
-	}
-}
-
-int QuickOpenApplication::OnExit()
-{
-	if (this->icon != nullptr)
-	{
-		this->icon->RemoveIcon();
-		this->icon->Destroy();
-		this->icon = nullptr;
-	}
-
-	mg_exit_library();
-
-	return 0;
 }
 
 wxBEGIN_EVENT_TABLE(QuickOpenTaskbarIcon::TaskbarMenu, wxMenu)

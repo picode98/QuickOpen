@@ -16,7 +16,11 @@ ManagementServer::ManagementServer(IQuickOpenApplication& appRef, unsigned port)
 {
 	std::ofstream mgmtFileOut;
 	mgmtFileOut.exceptions(std::ios::failbit);
+#ifdef WIN32
 	mgmtFileOut.open((InstallationInfo::detectInstallation().configFolder / wxFileName(".", "mgmtServer.json")).GetFullPath().ToStdWstring());
+#else
+    mgmtFileOut.open((InstallationInfo::detectInstallation().configFolder / wxFileName(".", "mgmtServer.json")).GetFullPath().ToStdString());
+#endif
 	mgmtFileOut << nlohmann::json(MgmtServerFileData{ port, authHandler.addToken("127.0.0.1") });
 	mgmtFileOut.close();
 

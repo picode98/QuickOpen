@@ -38,23 +38,12 @@ const std::filesystem::path STATIC_PATH = std::filesystem::current_path() / "sta
 typedef uint32_t ConsentToken;
 
 class TrayStatusWindow;
-class QuickOpenApplication;
 
-#ifdef _WIN32
-
-inline void openURL(const std::string& URL, const tstring& browserCommandLineFormat = getDefaultBrowserCommandLine())
+inline void openURL(const std::string& URL, const wxString& browserCommandLineFormat = getDefaultBrowserCommandLine())
 {
-#ifdef UNICODE
-	std::wstring URLWStr = UTF8StrToWideStr(URL);
-	tstring browserCommandLine = substituteWinShellFormatString(browserCommandLineFormat, { URLWStr });
-	// startSubprocess(browserCommandLine);
-#else
-	// startSubprocess(browserExecPath, { URL });
-	tstring browserCommandLine = substituteWinShellFormatString(browserCommandLineFormat, { URL });
-#endif
+    wxString browserCommandLine = substituteFormatString(browserCommandLineFormat, wxT('%'), { wxString::FromUTF8(URL) }, {});
 	startSubprocess(browserCommandLine);
 }
-#endif
 
 class StaticHandler : public CivetHandler
 {
@@ -78,14 +67,12 @@ public:
 class OpenWebpageAPIEndpoint : public CivetHandler
 {
 	IQuickOpenApplication& wxAppRef;
-	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 	// IQuickOpenApplication 
 
 public:
-	OpenWebpageAPIEndpoint(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, IQuickOpenApplication& wxAppRef, std::mutex& consentDialogMutex, WriterReadersLock<std::set<wxString>>& bannedIPRef):
-		configLock(configLock),
+	OpenWebpageAPIEndpoint(IQuickOpenApplication& wxAppRef, std::mutex& consentDialogMutex, WriterReadersLock<std::set<wxString>>& bannedIPRef):
 		wxAppRef(wxAppRef),
 		consentDialogMutex(consentDialogMutex),
 		bannedIPRef(bannedIPRef)
@@ -136,14 +123,13 @@ public:
 	WriterReadersLock<TokenMap> tokenWRRef;
 private:
 	// TokenMap tokens;
-	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
 	IQuickOpenApplication& wxAppRef;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 
 public:
-	FileConsentTokenService(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, IQuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
-		tokenWRRef(std::make_unique<TokenMap>()), configLock(configLock),
+	FileConsentTokenService(std::mutex& consentDialogMutex, IQuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
+		tokenWRRef(std::make_unique<TokenMap>()),
 		consentDialogMutex(consentDialogMutex),
 		wxAppRef(wxAppRef),
 		bannedIPRef(bannedIPRef)
@@ -156,7 +142,7 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 {
 	// WriterReadersLock<AppConfig>& configLock;
 	FileConsentTokenService& consentServiceRef;
-	QuickOpenApplication& progressReportingApp;
+	IQuickOpenApplication& progressReportingApp;
 
 	class IncorrectFileLengthException : public std::runtime_error
 	{
@@ -184,7 +170,7 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 
 	// TrayStatusWindow* statusWindow = nullptr;
 public:
-	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef, QuickOpenApplication& progressReportingApp) : consentServiceRef(consentServiceRef),
+	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef, IQuickOpenApplication& progressReportingApp) : consentServiceRef(consentServiceRef),
 		progressReportingApp(progressReportingApp)
 	{}
 
@@ -193,9 +179,8 @@ public:
 
 class QuickOpenWebServer : public CivetServer
 {
-	QuickOpenApplication& wxAppRef;
+	IQuickOpenApplication& wxAppRef;
 
-	std::shared_ptr<WriterReadersLock<AppConfig>> wrLock;
 	std::mutex consentDialogMutex;
 
 	WriterReadersLock<std::set<wxString>> bannedIPs;
@@ -210,7 +195,7 @@ class QuickOpenWebServer : public CivetServer
 	void onWebpageOpened(const wxString& url);
 	unsigned port;
 public:
-	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef, unsigned port);
+	QuickOpenWebServer(IQuickOpenApplication& wxAppRef, unsigned port);
 
 	unsigned getPort() const
 	{
