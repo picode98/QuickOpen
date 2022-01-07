@@ -58,6 +58,7 @@ endif()
 # Include sub-projects.
 add_subdirectory("QuickOpen")
 add_subdirectory("Tests")
+add_subdirectory("NautilusExt")
 
 include(InstallRequiredSystemLibraries)
 include(CPack)
