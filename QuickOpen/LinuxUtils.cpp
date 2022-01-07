@@ -12,6 +12,7 @@
 
 #include <regex>
 #include <set>
+#include <iostream>
 
 void handleLinuxSystemError(bool errCond)
 {
@@ -54,18 +55,42 @@ void startSubprocess(const wxString& commandLine)
     wxExecute(commandLine, wxEXEC_ASYNC);
 }
 
+void startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
+{
+    pid_t childPID = fork();
+    handleLinuxSystemError(childPID == -1);
+    if(childPID == 0)
+    {
+        char* argvArray[args.size() + 2];
+        argvArray[0] = strdup(exePath.ToUTF8());
+
+        for(unsigned i = 0; i < args.size(); ++i)
+        {
+            argvArray[i + 1] = strdup(args[i].ToUTF8());
+        }
+
+        argvArray[args.size() + 1] = nullptr;
+
+        execvp(exePath.c_str(), argvArray);
+        try
+        {
+            handleLinuxSystemError(true); // If this point is reached, something went wrong.
+        }
+        catch(LinuxException& ex)
+        {
+            std::cerr << "ERROR: Child process failed to load new program: " << ex.what() << std::endl;
+            exit(1);
+        }
+    }
+}
+
 void shellExecuteFile(const wxFileName& filePath, const wxWindow* window)
 {
-    std::string filePathStr = static_cast<std::string>(filePath.GetFullPath().ToUTF8());
-    const char* argv[2] = {  "xdg-open", filePathStr.c_str() };
-    wxExecute(argv, wxEXEC_ASYNC);
-//    if(fork() == 0)
-//    {
-//        std::string filePathStr = static_cast<std::string>(filePath.GetFullPath().ToUTF8());
-//        char* argv[1] = { filePathStr.data() };
-//        execvp("xdg-open", argv);
-//        handleLinuxSystemError(true); // If this point is reached, something went wrong.
-//    }
+    // std::string filePathStr = static_cast<std::string>(filePath.GetFullPath().ToUTF8());
+    // const char* argv[2] = {  "xdg-open", filePathStr.c_str() };
+    // wxExecute(argv, wxEXEC_ASYNC);
+
+    startSubprocess(wxT("xdg-open"), { filePath.GetFullPath() });
 }
 
 void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile)

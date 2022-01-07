@@ -51,15 +51,11 @@ namespace QuickOpenMenuProvider
     static void onMenuItemActivated(NautilusMenuItem *item,
                              gpointer user_data)
     {
-        std::cout << "Menu item was activated!" << std::endl;
-
         auto* files = static_cast<GList *>(g_object_get_data(reinterpret_cast<GObject *>(item), "QuickOpenNautilusExtension_files"));
         IF_ERROR(files == nullptr, return);
 
         NautilusFileInfo* dirInfo = NAUTILUS_FILE_INFO(files->data);
         char* folderPath = g_file_get_path(nautilus_file_info_get_location(dirInfo));
-
-        std::cout << "Folder: " << folderPath << std::endl;
 
         Dl_info libInfo;
         IF_ERROR(dladdr(reinterpret_cast<const void *>(nautilus_module_initialize), &libInfo) == 0, return);
@@ -67,15 +63,11 @@ namespace QuickOpenMenuProvider
         char* resolvedPath = realpath(libInfo.dli_fname, nullptr);
         IF_ERROR(resolvedPath == nullptr, return);
 
-        std::cout << "Shared library: " << resolvedPath << std::endl;
-
         std::string quickOpenPath = dirname(dirname(resolvedPath));
         quickOpenPath += "/bin/QuickOpen";
 
         free(resolvedPath);
         resolvedPath = nullptr;
-
-        std::cout << "QuickOpen path: " << quickOpenPath << std::endl;
 
         pid_t childPID = fork();
         IF_ERROR(childPID == -1, return);
@@ -89,8 +81,6 @@ namespace QuickOpenMenuProvider
                                                  GtkWidget* window,
                                                  GList* files)
     {
-        std::cout << "Menu was shown!" << std::endl;
-
         // Only add the context menu item if a single directory is selected
         if(files == nullptr || files->next != nullptr || !nautilus_file_info_is_directory(NAUTILUS_FILE_INFO(files->data)))
         {
