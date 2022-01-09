@@ -50,12 +50,12 @@ wxFileName getAppExecutablePath()
 //    }
 //}
 
-void startSubprocess(const wxString& commandLine)
+pid_t startSubprocess(const wxString& commandLine)
 {
-    wxExecute(commandLine, wxEXEC_ASYNC);
+    return wxExecute(commandLine, wxEXEC_ASYNC);
 }
 
-void startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
+pid_t startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
 {
     pid_t childPID = fork();
     handleLinuxSystemError(childPID == -1);
@@ -79,8 +79,13 @@ void startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
         catch(LinuxException& ex)
         {
             std::cerr << "ERROR: Child process failed to load new program: " << ex.what() << std::endl;
-            exit(1);
         }
+
+        exit(1);
+    }
+    else
+    {
+        return childPID;
     }
 }
 
