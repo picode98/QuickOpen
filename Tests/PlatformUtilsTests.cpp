@@ -53,3 +53,40 @@ TEST_CASE("getPhysicalNetworkInterfaces function")
         }
     }
 }
+
+TEST_CASE("getInstalledWebBrowsers function")
+{
+    auto browserList = getInstalledWebBrowsers();
+
+    for(const WebBrowserInfo& browser : browserList)
+    {
+        REQUIRE(!browser.browserID.empty());
+        REQUIRE(!browser.browserExecCommandFormat.empty());
+        REQUIRE(!browser.browserName.empty());
+
+#ifdef __linux__
+        // On Linux, browser IDs are the full path to the executable
+        wxFileName browserPath(browser.browserID);
+        REQUIRE(browserPath.FileExists());
+        REQUIRE(browserPath.IsFileExecutable());
+
+        // The path to the executable should appear in the command line
+        REQUIRE(browser.browserExecCommandFormat.find(browser.browserID) != std::string::npos);
+#endif
+    }
+}
+
+TEST_CASE("InstallationInfo::detectInstallation function")
+{
+    InstallationInfo installInfo = InstallationInfo::detectInstallation();
+
+    REQUIRE(installInfo.binaryFolder == getAppExecutablePath() / wxFileName(".", ""));
+
+    REQUIRE(installInfo.binaryFolder.DirExists());
+    REQUIRE(installInfo.binaryFolder.IsDirReadable());
+    REQUIRE(installInfo.configFolder.DirExists());
+    REQUIRE(installInfo.configFolder.IsDirReadable());
+    REQUIRE(installInfo.configFolder.IsDirWritable());
+    REQUIRE(installInfo.dataFolder.DirExists());
+    REQUIRE(installInfo.dataFolder.IsDirReadable());
+}

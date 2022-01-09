@@ -201,16 +201,17 @@ std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
 std::vector<WebBrowserInfo> getInstalledWebBrowsers()
 {
     std::vector<WebBrowserInfo> results;
+    const auto altRegex = std::regex("Alternative: (.*)\n");
 
     FILE* alternativesProc = nullptr;
     handleLinuxSystemError((alternativesProc = popen("update-alternatives --query x-www-browser", "r")) == nullptr);
 
-    size_t currentLineBufSize, currentLineLength;
-    char* currentLine;
+    size_t currentLineBufSize = 0, currentLineLength;
+    char* currentLine = nullptr;
     while((currentLineLength = getline(&currentLine, &currentLineBufSize, alternativesProc)) != -1)
     {
         std::cmatch matchResults;
-        if(std::regex_match(currentLine, matchResults, std::regex("Alternative: (.*)\n")))
+        if(std::regex_match(currentLine, matchResults, altRegex))
         {
             results.emplace_back(WebBrowserInfo { matchResults[1].str(), matchResults[1].str(), matchResults[1].str() + " \"%1\"" } );
         }
