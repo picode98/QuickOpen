@@ -11,6 +11,9 @@
 #include "GUIUtils.h"
 #include "PlatformUtils.h"
 
+struct AppConfig;
+class IQuickOpenApplication;
+
 class TrayStatusWindow : public wxFrame
 {
 public:
@@ -122,6 +125,8 @@ public:
 		// wxDECLARE_EVENT_TABLE();
 	};
 private:
+    IQuickOpenApplication& appRef;
+
 	wxPanel* topLevelPanel = nullptr;
 	wxBoxSizer* topLevelSizer = nullptr;
 	ServerURLDisplay* URLDisplay = nullptr;
@@ -129,10 +134,11 @@ private:
 
 	void OnWindowActivationChanged(wxActivateEvent& event);
 	void OnShow(wxShowEvent& event);
+    void OnClose(wxCloseEvent& event);
 	void fitActivityListWidth();
 
 public:
-	TrayStatusWindow();
+	TrayStatusWindow(IQuickOpenApplication& appRef);
 
     void showAtCursor()
     {

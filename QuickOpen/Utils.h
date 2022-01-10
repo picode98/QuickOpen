@@ -6,13 +6,23 @@
 
 #include <memory>
 #include <shared_mutex>
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <map>
+#include <optional>
 
-#include <civetweb.h>
+#include "CivetWebIncludes.h"
 
 #include <nlohmann/json.hpp>
+
+enum class MessageSeverity
+{
+	MSG_ERROR,
+	MSG_WARNING,
+	MSG_INFO,
+	MSG_DEBUG
+};
 
 inline std::map<wxString, wxString> getDependencyVersions()
 {
@@ -64,6 +74,11 @@ public:
 			owner.lockForWriting();
 		}
 
+		T& operator*() const
+		{
+			return *owner.obj.get();
+		}
+
 		T* operator->() const
 		{
 			return owner.obj.get();
@@ -83,6 +98,11 @@ public:
 		ReadableReference(WriterReadersLock& owner) : owner(owner)
 		{
 			owner.lockForReading();
+		}
+
+		const T& operator*() const
+		{
+			return *owner.obj.get();
 		}
 
 		const T* operator->() const
@@ -124,6 +144,76 @@ public:
 		rwLock.unlock();
 	}
 };
+
+template<typename T, T defaultValue>
+class WithStaticDefault
+{
+	std::optional<T> value;
+public:
+	static inline const T DEFAULT_VALUE = defaultValue;
+
+	WithStaticDefault() {}
+
+	WithStaticDefault(const T& value) : value(value)
+	{}
+
+	T effectiveValue() const
+	{
+		return value.value_or(defaultValue);
+	}
+
+	operator T() const
+	{
+		return effectiveValue();
+	}
+
+	WithStaticDefault& operator=(const T& rhs)
+	{
+		this->value = rhs;
+		return *this;
+	}
+
+	void reset()
+	{
+		this->value.reset();
+	}
+
+	bool isSet() const
+	{
+		return this->value.has_value();
+	}
+};
+
+namespace nlohmann
+{
+	template<typename T, T defaultValue>
+	struct adl_serializer<WithStaticDefault<T, defaultValue>>
+	{
+		static void to_json(json& j, const WithStaticDefault<T, defaultValue>& opt)
+		{
+			if(opt.isSet())
+			{
+				j = static_cast<T>(opt);
+			}
+			else
+			{
+				j = nullptr;
+			}
+		}
+
+		static void from_json(const json& j, WithStaticDefault<T, defaultValue>& opt)
+		{
+			if(j.is_null())
+			{
+				opt.reset();
+			}
+			else
+			{
+				opt = static_cast<T>(j);
+			}
+		}
+	};
+}
 
 inline long strtol(const wxString& str)
 {
@@ -194,6 +284,7 @@ inline wxString substituteFormatString(const wxString& format, wxUniChar placeho
 					: (getPlaceholderValue(args, kwArgs, currentPlaceholderStr, parsingKWPlaceholder) +
 						thisChar);
 				parsingPlaceholder = parsingKWPlaceholder = false;
+				currentPlaceholderStr = wxEmptyString;
 			}
 		}
 		else if (thisChar == placeholderChar)
@@ -245,4 +336,21 @@ inline std::string MGReadAll(mg_connection* conn)
 	}
 
 	return strBuilder.str();
+}
+
+inline std::string fileReadAll(const wxFileName& path)
+{
+	std::ifstream fileIn;
+	std::string fileStr;
+	fileIn.exceptions(std::ios::failbit);
+#ifdef WIN32
+	fileIn.open(path.GetFullPath().ToStdWstring());
+#else
+    fileIn.open(path.GetFullPath().ToStdString());
+#endif
+	std::stringstream dataStream;
+	dataStream << fileIn.rdbuf();
+	fileIn.close();
+
+	return dataStream.str();
 }

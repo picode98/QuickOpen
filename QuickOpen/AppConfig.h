@@ -20,7 +20,7 @@ namespace SettingRetrieval
     {
         try
         {
-            destination = config.at(key);
+            destination = static_cast<const T&>(config.at(key));
             return true;
         }
         catch (const nlohmann::json::out_of_range&)
@@ -35,7 +35,7 @@ struct AppConfig
 {
 	// static const std::map<ConfigKey, wxString> CONFIG_KEY_NAMES;
 
-	bool runAtStartup = false;
+	// bool runAtStartup = false;
 
 	wxString browserID;
 	wxString customBrowserPath;
@@ -43,7 +43,7 @@ struct AppConfig
 	bool saveUseLastFolder = true;
 	wxFileName fileSavePath;
 
-	long maxSaveFileSize = 1 << 20;
+	WithStaticDefault<unsigned, 8080> serverPort;
 
 	static inline wxFileName defaultConfigPath()
 	{

@@ -1,3 +1,7 @@
+#include "WebServer.h"
+
+#include <wx/cmdline.h>
+
 #include "AppGUI.h"
 
 wxBoxSizer* makeLabeledSizer(wxWindow* control, const wxString& labelText, wxWindow* parent, int spacing)
@@ -110,10 +114,27 @@ bool FilePathValidator::Validate(wxWindow* parent)
 }
 
 QuickOpenSettings::
-QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxID_ANY, wxT("Settings")),
-                                                            configRef(configRef)
+QuickOpenSettings(IQuickOpenApplication& appRef): wxFrame(nullptr, wxID_ANY, wxT("Settings")),
+                                                            appRef(appRef)
 {
-	WriterReadersLock<AppConfig>::ReadableReference config(configRef);
+	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
+	WriterReadersLock<AppConfig>::ReadableReference config(*appRef.getConfigRef());
+
+#ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
+	StartupEntryState startupState = getStartupEntryState();
+
+	if(startupState == StartupEntryState::DIFFERENT_APPLICATION)
+	{
+		int result = wxMessageBox(wxT("The startup entry for QuickOpen points to a different application.\n")
+			wxT("This may indicate a corrupted installation. Would you like to reset it?"), wxT("Startup Entry"), wxICON_WARNING | wxYES_NO, this);
+		if(result == wxYES)
+		{
+			addUserStartupEntry();
+			startupState = getStartupEntryState();
+		}
+	}
+#endif
+
 
 	wxPanel* topLevelPanel = new wxPanel(this);
 	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
@@ -135,13 +156,32 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	// test->Add(systemGroup);
 	// this->systemGroup->SetPosition({ 100, 50 });
 	this->systemGroupSizer = new wxStaticBoxSizer(this->systemGroup, wxVERTICAL);
-	topLevelSizer->Add(systemGroupSizer);
+	topLevelSizer->Add(systemGroupSizer, wxSizerFlags(0).Expand());
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
 	this->runAtStartupCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Run QuickOpen at startup"));
-	this->runAtStartupCheckbox->SetValue(config->runAtStartup);
 	this->systemGroupSizer->Add(runAtStartupCheckbox);
+
+#ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
+	if(InstallationInfo::detectInstallation().installType == InstallationInfo::INSTALLED_SYSTEM)
+	{
+		this->runAtStartupCheckbox->SetValue(startupState == StartupEntryState::PRESENT);
+	}
+	else
+	{
+		this->runAtStartupCheckbox->Disable();
+		auto userInfoText = new AutoWrappingStaticText(topLevelPanel, wxID_ANY, wxT("To avoid misconfiguration, system settings are only")
+			wxT(" available for installed instances of QuickOpen."));
+		userInfoText->SetForegroundColour(ERROR_TEXT_COLOR);
+		this->systemGroupSizer->Add(userInfoText, wxSizerFlags(0).Expand());
+	}
+#else
+	this->runAtStartupCheckbox->Disable();
+	auto userInfoText = new AutoWrappingStaticText(topLevelPanel, wxID_ANY, wxT("Feature not currently supported on this platform"));
+	userInfoText->SetForegroundColour(ERROR_TEXT_COLOR);
+	this->systemGroupSizer->Add(userInfoText, wxSizerFlags(0).Expand());
+#endif
 
 	this->webpageOpenGroup = new wxStaticBox(topLevelPanel, wxID_ANY, wxT("Opening Webpages"));
 	this->webpageOpenGroupSizer = new wxStaticBoxSizer(this->webpageOpenGroup, wxVERTICAL);
@@ -222,9 +262,10 @@ QuickOpenSettings(WriterReadersLock<AppConfig>& configRef): wxFrame(nullptr, wxI
 	topLevelSizer->Add(fileOpenSaveGroupSizer, wxSizerFlags(0).Expand());
 
 	fileOpenSaveGroupSizer->Add(
-		makeLabeledSizer(new wxSpinCtrl(topLevelPanel, wxID_ANY, (wxString() << config->maxSaveFileSize), wxDefaultPosition,
-		                                wxDefaultSize, wxSP_ARROW_KEYS, 0, 1024),
-		                 wxT("Maximum size for uploaded files:"), topLevelPanel),
+		makeLabeledSizer(serverPortCtrl = new wxSpinCtrl(topLevelPanel, wxID_ANY,
+									(config->serverPort.isSet() ? (wxString() << config->serverPort) : wxString()), wxDefaultPosition,
+		                                wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535),
+		                 wxString(wxT("Server port (default: ")) << decltype(config->serverPort)::DEFAULT_VALUE << wxT(")"), topLevelPanel),
 		wxSizerFlags(0).Expand());
 
 	fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
@@ -272,16 +313,46 @@ void QuickOpenSettings::OnSaveButton(wxCommandEvent& event)
 {
 	if (this->Validate() && this->TransferDataFromWindow())
 	{
-		WriterReadersLock<AppConfig>::WritableReference config(this->configRef);
+		WriterReadersLock<AppConfig>::WritableReference config(*appRef.getConfigRef());
 
 		std::cout << "Saving settings." << std::endl;
 
-		config->runAtStartup = runAtStartupCheckbox->IsChecked();
+#ifdef PLATFORM_STARTUP_ENTRY_SUPPORTED
+		// Apply system integration changes if this is a system-wide installation
+		if(InstallationInfo::detectInstallation().installType == InstallationInfo::INSTALLED_SYSTEM)
+		{
+			if (runAtStartupCheckbox->IsChecked())
+			{
+				addUserStartupEntry();
+			}
+			else if (getStartupEntryState() == StartupEntryState::PRESENT)
+			{
+				removeUserStartupEntry();
+			}
+		}
+#endif
+
+		// config->runAtStartup = runAtStartupCheckbox->IsChecked();
 
 		int selectionIndex = this->browserSelection->GetSelection();
 
 		bool selectionIsInstalledBrowser = selectionIndex >= this->browserSelInstalledListStartIndex
 			&& selectionIndex < this->browserSelInstalledListStartIndex + this->installedBrowsers.size();
+
+		auto oldServerPort = config->serverPort;
+		if(this->serverPortCtrl->GetValue() == 0)
+		{
+			config->serverPort.reset();
+		}
+		else
+		{
+			config->serverPort = this->serverPortCtrl->GetValue();
+		}
+
+		if(oldServerPort.effectiveValue() != config->serverPort.effectiveValue())
+		{
+			this->appRef.setupServer(config->serverPort);
+		}
 
 		config->browserID = selectionIsInstalledBrowser
 			                    ? this->installedBrowsers[selectionIndex - this->browserSelInstalledListStartIndex].
@@ -365,6 +436,49 @@ void QuickOpenSettings::updateSaveFolderEnabledState()
 	}
 }
 
+ConsentDialog::ConsentDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxString& requesterName): wxDialog(parent, id, title, wxDefaultPosition, wxDefaultSize,
+                                                                                                                              wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+{
+	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
+
+	topLevelSizer = new wxBoxSizer(wxVERTICAL);
+	topLevelSizer->Add(content = new wxWindow(this, wxID_ANY), wxSizerFlags(1).Expand());
+
+	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
+	topLevelSizer->Add(denyFutureRequestsCheckbox = new wxCheckBox(this, wxID_ANY, wxT("Decline future requests from ") + requesterName + wxT(" (until QuickOpen is restarted)")),
+	                   wxSizerFlags(0).Expand());
+	denyFutureRequestsCheckbox->Bind(wxEVT_CHECKBOX, &ConsentDialog::OnDenyFutureRequestsCheckboxChecked, this);
+
+	auto* bottomButtonSizer = new wxBoxSizer(wxHORIZONTAL);
+
+	bottomButtonSizer->AddStretchSpacer(1);
+	bottomButtonSizer->Add(acceptButton = new wxButton(this, wxID_ANY, wxT("Accept")));
+	bottomButtonSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+	bottomButtonSizer->Add(rejectButton = new wxButton(this, wxID_ANY, wxT("Decline")));
+
+	topLevelSizer->Add(bottomButtonSizer, wxSizerFlags(0).Expand());
+
+	acceptButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnAcceptClicked, this);
+	rejectButton->Bind(wxEVT_BUTTON, &ConsentDialog::OnDeclineClicked, this);
+
+	setSizerWithPadding(this, topLevelSizer);
+	this->Fit();
+}
+
+WebpageOpenConsentDialog::WebpageOpenConsentDialog(const wxString& URL, const wxString& requesterName):
+	ConsentDialog(nullptr, wxID_ANY, wxT("Webpage Open Request"), requesterName)
+{
+	wxWindow* contentWindow = new wxWindow(this, wxID_ANY);
+	wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
+	contentSizer->Add(headerText = new wxStaticText(contentWindow, wxID_ANY,
+	                                                wxString() << wxT("A user at " << requesterName << wxT(" is requesting that you open the following URL:\n\n") << URL
+		                                                << wxT("\n\nWould you like to proceed?"))), wxSizerFlags(0).Expand());
+
+	contentWindow->SetSizerAndFit(contentSizer);
+	this->setContent(contentWindow);
+}
+
 void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 {
 	if (this->Validate() && this->TransferDataFromWindow())
@@ -403,7 +517,7 @@ void FileOpenSaveConsentDialog::OnAcceptClicked(wxCommandEvent& event)
 
 FileOpenSaveConsentDialog::FileOpenSaveConsentDialog(const wxFileName& defaultDestinationFolder, const FileConsentRequestInfo& requestInfo,
 	std::shared_ptr<WriterReadersLock<AppConfig>> configRef, const wxString& requesterName) :
-	ConsentDialog(nullptr, wxID_ANY, wxT("Receiving File"), requesterName), requestInfo(requestInfo),
+	ConsentDialog(nullptr, wxID_ANY, wxT("Receiving File"), requesterName), requestInfo(std::make_unique<FileConsentRequestInfo>(requestInfo)),
 	configRef(configRef), defaultDestinationFolder(defaultDestinationFolder)
 {
 	wxWindow* contentWindow = new wxWindow(this, wxID_ANY);
@@ -472,7 +586,7 @@ std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
 	{
 		std::vector<wxFileName> fileNames;
 		wxFileName destFolder = dynamic_cast<FilePathValidator*>(destFolderNameInput->GetValidator())->fileName;
-		for(const auto& thisFile : requestInfo.fileList)
+		for(const auto& thisFile : requestInfo->fileList)
 		{
 			fileNames.push_back(destFolder);
 			fileNames.back().SetFullName(thisFile.filename);
@@ -486,11 +600,70 @@ std::vector<wxFileName> FileOpenSaveConsentDialog::getConsentedFilenames() const
 	}
 }
 
+QuickOpenTaskbarIcon::TaskbarMenu::TaskbarMenu(IQuickOpenApplication& appRef, TrayStatusWindow* statusWindow): appRef(appRef),
+	statusWindow(statusWindow)
+{
+	this->Append(STATUS, wxT("Open Status"));
+	this->Append(CLIENT_PAGE, wxT("Open Client Webpage"));
+	this->Append(SETTINGS, wxT("Open Settings"));
+	this->AppendSeparator();
+	this->Append(ABOUT, wxT("About QuickOpen"));
+	this->Append(EXIT, wxT("Exit QuickOpen"));
+}
+
+void QuickOpenTaskbarIcon::TaskbarMenu::OnClientPageItemSelected(wxCommandEvent& event)
+{
+	unsigned currentPort = WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort;
+	openURL(std::string("http://localhost") + (currentPort != 80 ? ":" + std::to_string(currentPort) : ""));
+}
+
+void QuickOpenTaskbarIcon::TaskbarMenu::OnAboutItemSelected(wxCommandEvent& event)
+{
+	wxString depStr = wxT("with additional credit to developers of the following dependencies:\n");
+
+	auto depVersions = getDependencyVersions();
+	for(auto item = depVersions.begin(); item != depVersions.end(); ++item)
+	{
+		auto nextItem = std::next(item);
+
+		depStr += item->first + wxT(" (version ") + item->second + wxT(")");
+				
+		if(nextItem != depVersions.end())
+		{
+			if (std::next(nextItem) == depVersions.end())
+			{
+				depStr += wxT(", and ");
+			}
+			else
+			{
+				depStr += wxT(", ");
+			}
+		}
+	}
+
+	wxAboutDialogInfo aboutDialogInfo;
+	aboutDialogInfo.AddDeveloper(wxT(QUICKOPEN_DEVELOPER));
+	aboutDialogInfo.AddDeveloper(depStr);
+	// aboutDialogInfo.AddDeveloper(wxT(""))
+	aboutDialogInfo.SetVersion(wxString(wxT("Version ")) + wxT(QUICKOPEN_VERSION_STR));
+	aboutDialogInfo.SetDescription(wxT(QUICKOPEN_SHORT_DESC));
+	aboutDialogInfo.SetCopyright(wxT(QUICKOPEN_LICENSE));
+	aboutDialogInfo.SetWebSite(wxT(QUICKOPEN_REPO_URL));
+	aboutDialogInfo.SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
+	// aboutDialogInfo.GetDescriptionAndCredits()
+
+	wxAboutBox(aboutDialogInfo);
+}
+
 wxBEGIN_EVENT_TABLE(QuickOpenTaskbarIcon::TaskbarMenu, wxMenu)
-    EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::STATUS, QuickOpenTaskbarIcon::TaskbarMenu::OnStatusItemSelected)
+	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::STATUS, QuickOpenTaskbarIcon::TaskbarMenu::OnStatusItemSelected)
+	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::CLIENT_PAGE, QuickOpenTaskbarIcon::TaskbarMenu::OnClientPageItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::SETTINGS, QuickOpenTaskbarIcon::TaskbarMenu::OnSettingsItemSelected)
     EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::ABOUT, QuickOpenTaskbarIcon::TaskbarMenu::OnAboutItemSelected)
 	EVT_MENU(QuickOpenTaskbarIcon::TaskbarMenu::MenuItems::EXIT, QuickOpenTaskbarIcon::TaskbarMenu::OnExitItemSelected)
 wxEND_EVENT_TABLE()
 
-wxIMPLEMENT_APP(QuickOpenApplication);
+wxBEGIN_EVENT_TABLE(NotificationWindow, wxGenericMessageDialog)
+	EVT_BUTTON(wxID_YES, NotificationWindow::OnOKClicked)
+	EVT_BUTTON(wxID_NO, NotificationWindow::OnMoreInfoClicked)
+wxEND_EVENT_TABLE()

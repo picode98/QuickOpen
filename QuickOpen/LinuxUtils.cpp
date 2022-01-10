@@ -2,6 +2,8 @@
 // Created by sdk on 8/30/21.
 //
 
+#include <wx/stdpaths.h>
+
 #include "LinuxUtils.h"
 #include "Utils.h"
 
@@ -12,6 +14,7 @@
 
 #include <regex>
 #include <set>
+#include <iostream>
 
 void handleLinuxSystemError(bool errCond)
 {
@@ -49,23 +52,52 @@ wxFileName getAppExecutablePath()
 //    }
 //}
 
-void startSubprocess(const wxString& commandLine)
+pid_t startSubprocess(const wxString& commandLine)
 {
-    wxExecute(commandLine, wxEXEC_ASYNC);
+    return wxExecute(commandLine, wxEXEC_ASYNC);
+}
+
+pid_t startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
+{
+    pid_t childPID = fork();
+    handleLinuxSystemError(childPID == -1);
+    if(childPID == 0)
+    {
+        char* argvArray[args.size() + 2];
+        argvArray[0] = strdup(exePath.ToUTF8());
+
+        for(unsigned i = 0; i < args.size(); ++i)
+        {
+            argvArray[i + 1] = strdup(args[i].ToUTF8());
+        }
+
+        argvArray[args.size() + 1] = nullptr;
+
+        execvp(exePath.c_str(), argvArray);
+        try
+        {
+            handleLinuxSystemError(true); // If this point is reached, something went wrong.
+        }
+        catch(LinuxException& ex)
+        {
+            std::cerr << "ERROR: Child process failed to load new program: " << ex.what() << std::endl;
+        }
+
+        exit(1);
+    }
+    else
+    {
+        return childPID;
+    }
 }
 
 void shellExecuteFile(const wxFileName& filePath, const wxWindow* window)
 {
-    std::string filePathStr = static_cast<std::string>(filePath.GetFullPath().ToUTF8());
-    const char* argv[2] = {  "xdg-open", filePathStr.c_str() };
-    wxExecute(argv, wxEXEC_ASYNC);
-//    if(fork() == 0)
-//    {
-//        std::string filePathStr = static_cast<std::string>(filePath.GetFullPath().ToUTF8());
-//        char* argv[1] = { filePathStr.data() };
-//        execvp("xdg-open", argv);
-//        handleLinuxSystemError(true); // If this point is reached, something went wrong.
-//    }
+    // std::string filePathStr = static_cast<std::string>(filePath.GetFullPath().ToUTF8());
+    // const char* argv[2] = {  "xdg-open", filePathStr.c_str() };
+    // wxExecute(argv, wxEXEC_ASYNC);
+
+    startSubprocess(wxT("xdg-open"), { filePath.GetFullPath() });
 }
 
 void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile)
@@ -171,16 +203,17 @@ std::vector<NetworkInterfaceInfo> getPhysicalNetworkInterfaces()
 std::vector<WebBrowserInfo> getInstalledWebBrowsers()
 {
     std::vector<WebBrowserInfo> results;
+    const auto altRegex = std::regex("Alternative: (.*)\n");
 
     FILE* alternativesProc = nullptr;
     handleLinuxSystemError((alternativesProc = popen("update-alternatives --query x-www-browser", "r")) == nullptr);
 
-    size_t currentLineBufSize, currentLineLength;
-    char* currentLine;
+    size_t currentLineBufSize = 0, currentLineLength;
+    char* currentLine = nullptr;
     while((currentLineLength = getline(&currentLine, &currentLineBufSize, alternativesProc)) != -1)
     {
         std::cmatch matchResults;
-        if(std::regex_match(currentLine, matchResults, std::regex("Alternative: (.*)")))
+        if(std::regex_match(currentLine, matchResults, altRegex))
         {
             results.emplace_back(WebBrowserInfo { matchResults[1].str(), matchResults[1].str(), matchResults[1].str() + " \"%1\"" } );
         }
@@ -199,7 +232,12 @@ InstallationInfo InstallationInfo::detectInstallation()
 
 	if (thisFolder.GetDirs().Last() == wxT("bin"))
 	{
-		return { INSTALLED_PACKAGE, thisFolder, thisFolder / wxFileName("../etc/QuickOpen", ""),
+        wxFileName userConfDir = wxFileName(wxStandardPaths::Get().GetUserConfigDir(), "") / wxFileName("./.config", "");
+        if(!userConfDir.DirExists()) userConfDir.Mkdir();
+        userConfDir.AppendDir("QuickOpen");
+        if(!userConfDir.DirExists()) userConfDir.Mkdir();
+
+		return { INSTALLED_PACKAGE, thisFolder, userConfDir,
 			staticEnvVarSet ? wxFileName(staticEnvVar, "") : (thisFolder / wxFileName("../share/QuickOpen", "")) };
 	}
 	else

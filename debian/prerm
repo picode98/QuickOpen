@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+case $1 in
+  "remove")
+    nautExtDir="$(find /usr/lib -regex '.*nautilus/extensions-3.0')"
+    ret=0
+    output=$(rm "${nautExtDir}/libQuickOpenNautilusExt.so" 2>&1 ) || ret=$?
+    if [ -$ret -ne 0 ] && echo "${output}" | grep -v "No such file"; then
+      echo "Deleting symbolic link failed: ${output}" >&2
+      exit 1
+    fi
+esac

@@ -41,7 +41,8 @@ void AppConfig::saveConfig(const wxFileName& filePath)
 	const wxFileName& effectiveFilePath = (filePath != wxFileName()) ? filePath : defaultConfigPath();
 
 	nlohmann::json jsonConfig = {
-		{"runAtStartup", runAtStartup},
+		// {"runAtStartup", runAtStartup},
+		{"serverPort", serverPort},
 		{
 			"webpageOpen", {
 				{"browserID", browserID},
@@ -59,7 +60,7 @@ void AppConfig::saveConfig(const wxFileName& filePath)
 	wxFileName dirName = getDirName(effectiveFilePath);
 	if(!dirName.DirExists() && !dirName.Mkdir())
 	{
-		throw std::exception("The configuration folder does not exist and could not be created.");
+		throw std::runtime_error("The configuration folder does not exist and could not be created.");
 	}
 
 	std::ofstream fileOutput;
@@ -93,7 +94,9 @@ AppConfig AppConfig::loadConfig(const wxFileName& filePath)
 	fileInput >> jsonConfig;
 
 	AppConfig newConfig;
-	getSettingWarn(jsonConfig, "runAtStartup", newConfig.runAtStartup);
+	// getSettingWarn(jsonConfig, "runAtStartup", newConfig.runAtStartup);
+
+	getSettingWarn(jsonConfig, "serverPort", newConfig.serverPort);
 
 	nlohmann::json openWebpageSettings;
 	if (getSettingWarn(jsonConfig, "webpageOpen", openWebpageSettings))

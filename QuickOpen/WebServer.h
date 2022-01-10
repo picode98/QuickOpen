@@ -7,7 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
-// #include "AppGUI.h"
+#include "AppGUI.h"
 #include "TrayStatusWindow.h"
 #include "AppConfig.h"
 #include "Utils.h"
@@ -16,7 +16,7 @@
 #include <string>
 
 
-#include <CivetServer.h>
+#include "CivetWebIncludes.h"
 
 // #include <boost/process.hpp>
 
@@ -34,88 +34,47 @@
 #include "PlatformUtils.h"
 
 const std::filesystem::path STATIC_PATH = std::filesystem::current_path() / "static";
-const int PORT = 8080;
 
 typedef uint32_t ConsentToken;
 
 class TrayStatusWindow;
-class QuickOpenApplication;
 
-std::string URLDecode(const std::string& encodedStr, bool decodePlus);
-
-#ifdef _WIN32
-
-inline void openURL(const std::string& URL, const tstring& browserCommandLineFormat = getDefaultBrowserCommandLine())
+inline void openURL(const std::string& URL, const wxString& browserCommandLineFormat = getDefaultBrowserCommandLine())
 {
-#ifdef UNICODE
-	std::wstring URLWStr = UTF8StrToWideStr(URL);
-	tstring browserCommandLine = substituteWinShellFormatString(browserCommandLineFormat, { URLWStr });
-	// startSubprocess(browserCommandLine);
-#else
-	// startSubprocess(browserExecPath, { URL });
-	tstring browserCommandLine = substituteWinShellFormatString(browserCommandLineFormat, { URL });
-#endif
+    wxString browserCommandLine = substituteFormatString(browserCommandLineFormat, wxT('%'), { wxString::FromUTF8(URL) }, {});
 	startSubprocess(browserCommandLine);
 }
-#endif
-
-std::map<std::string, std::string> parseFormEncodedBody(mg_connection* conn);
-
-std::map<std::string, std::string> parseQueryString(mg_connection* conn);
-
-struct FormErrorList
-{
-	struct FormError
-	{
-		std::string fieldName,
-			errorString;
-		
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(FormError, fieldName, errorString)
-	};
-
-	std::vector<FormError> errors;
-
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(FormErrorList, errors)
-};
-
-void sendJSONResponse(mg_connection* conn, int status, const nlohmann::json& json);
-
-class TestHandler : public CivetHandler
-{
-	bool handleGet(CivetServer* server, mg_connection* conn) override
-	{
-		std::string content = "This is a test.";
-		mg_send_http_ok(conn, "text/plain", content.size());
-		mg_write(conn, content.c_str(), content.size());
-
-		return true;
-	}
-};
 
 class StaticHandler : public CivetHandler
 {
 private:
 	const std::string staticPrefix;
     const wxFileName baseStaticPath;
+
+	CSRFAuthHandler* csrfHandler;
 public:
-	StaticHandler(const std::string& staticPrefix) : staticPrefix(staticPrefix), baseStaticPath(InstallationInfo::detectInstallation().dataFolder / wxFileName("static", ""))
+	StaticHandler(const std::string& staticPrefix, CSRFAuthHandler* csrfHandler = nullptr) : staticPrefix(staticPrefix),
+		baseStaticPath(InstallationInfo::detectInstallation().dataFolder / wxFileName("static", "")),
+		csrfHandler(csrfHandler)
 	{}
+
+	void sendProcessedPage(mg_connection* conn, const wxFileName& pagePath);
+	std::string resolveServerExpression(mg_connection* conn, const std::string& expr);
 
 	bool handleGet(CivetServer* server, mg_connection* conn) override;
 };
 
 class OpenWebpageAPIEndpoint : public CivetHandler
 {
-	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
-	QuickOpenApplication& wxAppRef;
+	IQuickOpenApplication& wxAppRef;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
+	// IQuickOpenApplication 
 
 public:
-	OpenWebpageAPIEndpoint(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, QuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef):
-		configLock(configLock),
-		consentDialogMutex(consentDialogMutex),
+	OpenWebpageAPIEndpoint(IQuickOpenApplication& wxAppRef, std::mutex& consentDialogMutex, WriterReadersLock<std::set<wxString>>& bannedIPRef):
 		wxAppRef(wxAppRef),
+		consentDialogMutex(consentDialogMutex),
 		bannedIPRef(bannedIPRef)
 	{}
 
@@ -131,6 +90,8 @@ struct FileConsentRequestInfo
 		unsigned long long fileSize;
 
 		wxFileName consentedFileName;
+		bool uploadStarted = false,
+			uploadEnded = false;
 
 		NLOHMANN_DEFINE_TYPE_INTRUSIVE(RequestedFileInfo, filename, fileSize)
 
@@ -158,18 +119,17 @@ class FileConsentTokenService : public CivetHandler
 	// static const size_t MAX_REQUEST_BODY_SIZE = 1 << 16;
 
 public:
-	typedef std::map<ConsentToken, FileConsentRequestInfo::RequestedFileInfo> TokenMap;
+	typedef std::map<ConsentToken, std::vector<FileConsentRequestInfo::RequestedFileInfo>> TokenMap;
 	WriterReadersLock<TokenMap> tokenWRRef;
 private:
 	// TokenMap tokens;
-	std::shared_ptr<WriterReadersLock<AppConfig>> configLock;
-	QuickOpenApplication& wxAppRef;
+	IQuickOpenApplication& wxAppRef;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 
 public:
-	FileConsentTokenService(const std::shared_ptr<WriterReadersLock<AppConfig>>& configLock, std::mutex& consentDialogMutex, QuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
-		tokenWRRef(std::make_unique<TokenMap>()), configLock(configLock),
+	FileConsentTokenService(std::mutex& consentDialogMutex, IQuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
+		tokenWRRef(std::make_unique<TokenMap>()),
 		consentDialogMutex(consentDialogMutex),
 		wxAppRef(wxAppRef),
 		bannedIPRef(bannedIPRef)
@@ -182,20 +142,35 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 {
 	// WriterReadersLock<AppConfig>& configLock;
 	FileConsentTokenService& consentServiceRef;
-	QuickOpenApplication& progressReportingApp;
+	IQuickOpenApplication& progressReportingApp;
 
-	class IncorrectFileLengthException : std::exception
-	{};
+	class IncorrectFileLengthException : public std::runtime_error
+	{
+	public:
+		IncorrectFileLengthException() : std::runtime_error("The length of the uploaded file differs from the consented length")
+		{}
+	};
 
-	class OperationCanceledException : std::exception
-	{};
+	class OperationCanceledException : public std::runtime_error
+	{
+	public:
+		OperationCanceledException() : std::runtime_error("The operation was canceled by the user")
+		{}
+	};
+
+	class ConnectionClosedException : public std::runtime_error
+	{
+	public:
+		ConnectionClosedException() : std::runtime_error("The connection was closed")
+		{}
+	};
 
 	void MGStoreBodyChecked(mg_connection* conn, const wxFileName& fileName, unsigned long long targetFileSize,
 		TrayStatusWindow::FileUploadActivityEntry* uploadActivityEntryRef, std::atomic<bool>& cancelRequestFlag);
 
 	// TrayStatusWindow* statusWindow = nullptr;
 public:
-	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef, QuickOpenApplication& progressReportingApp) : consentServiceRef(consentServiceRef),
+	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef, IQuickOpenApplication& progressReportingApp) : consentServiceRef(consentServiceRef),
 		progressReportingApp(progressReportingApp)
 	{}
 
@@ -204,34 +179,32 @@ public:
 
 class QuickOpenWebServer : public CivetServer
 {
-	std::shared_ptr<WriterReadersLock<AppConfig>> wrLock;
+	IQuickOpenApplication& wxAppRef;
+
 	std::mutex consentDialogMutex;
 
 	WriterReadersLock<std::set<wxString>> bannedIPs;
 
-	TestHandler testHandler;
+	CSRFAuthHandler csrfHandler;
+
 	StaticHandler staticHandler;
 	OpenWebpageAPIEndpoint webpageAPIEndpoint;
 	FileConsentTokenService fileConsentTokenService;
 	OpenSaveFileAPIEndpoint fileAPIEndpoint;
+
+	void onWebpageOpened(const wxString& url);
+	unsigned port;
 public:
-	QuickOpenWebServer(const std::shared_ptr<WriterReadersLock<AppConfig>>& wrLock, QuickOpenApplication& wxAppRef):
-		CivetServer({
-			"document_root", STATIC_PATH.generic_string(),
-			"listening_ports", '+' + std::to_string(PORT)
-		}),
-		wrLock(wrLock),
-		staticHandler("/"),
-		webpageAPIEndpoint(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
-		fileConsentTokenService(wrLock, consentDialogMutex, wxAppRef, bannedIPs),
-		fileAPIEndpoint(fileConsentTokenService, wxAppRef),
-		bannedIPs(std::make_unique<std::set<wxString>>())
+	QuickOpenWebServer(IQuickOpenApplication& wxAppRef, unsigned port);
+
+	unsigned getPort() const
 	{
-		this->addHandler("/test", testHandler);
-		this->addHandler("/", staticHandler);
-		this->addHandler("/api/openWebpage", webpageAPIEndpoint);
-		this->addHandler("/api/openSaveFile", fileAPIEndpoint);
-		this->addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);
+		return this->port;
+	}
+
+	~QuickOpenWebServer() override
+	{
+		this->close();
 	}
 };
 

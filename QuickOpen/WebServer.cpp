@@ -1,136 +1,59 @@
 #include "WebServer.h"
+#include "WebServerUtils.h"
 #include "AppGUI.h"
-
 #include "Utils.h"
 
 #include <regex>
 
-std::string URLDecode(const std::string& encodedStr, bool decodePlus)
+std::string StaticHandler::resolveServerExpression(mg_connection* conn, const std::string& expr)
 {
-	std::ostringstream outputStream;
-
-	for (size_t i = 0; i < encodedStr.size();)
+	if(expr == "CSRF_TOKEN")
 	{
-		switch (encodedStr[i])
+		if(this->csrfHandler != nullptr)
 		{
-		case '%':
-			outputStream << char(std::stoi(encodedStr.substr(i + 1, 2), nullptr, 16));
-			i += 3;
-			break;
-		case '+':
-			if (decodePlus)
-			{
-				outputStream << ' ';
-				++i;
-				break;
-			}
-		default:
-			outputStream << encodedStr[i];
-			++i;
-			break;
+			return std::to_string(this->csrfHandler->addToken(mg_get_request_info(conn)->remote_addr));
+		}
+		else
+		{
+			return "ERROR: No CSRF handler specified";
 		}
 	}
-
-	return outputStream.str();
-}
-
-std::map<std::string, std::string> parseFormEncodedBody(mg_connection* conn)
-{
-	static const long long CHUNK_SIZE = 1LL << 16;
-	char bodyBuffer[CHUNK_SIZE];
-	std::string currentKey, currentValue;
-	bool readingValue = false;
-	// const mg_request_info* rqInfo = mg_get_request_info(conn);
-
-	std::map<std::string, std::string> resultMap;
-
-	// long long maxContentLength = rqInfo->content_length == -1 ? std::numeric_limits<long long>::max() : rqInfo->content_length;
-	int bytesRead;
-	while ((bytesRead = mg_read(conn, bodyBuffer, CHUNK_SIZE)) > 0)
+	else
 	{
-		for (int i = 0; i < bytesRead; ++i)
-		{
-			switch (bodyBuffer[i])
-			{
-			case '&':
-				readingValue = false;
-				resultMap.insert({URLDecode(currentKey, true), URLDecode(currentValue, true)});
-				currentKey = currentValue = "";
-				break;
-			case '=':
-				readingValue = true;
-				break;
-			default:
-				if (readingValue)
-				{
-					currentValue += bodyBuffer[i];
-				}
-				else
-				{
-					currentKey += bodyBuffer[i];
-				}
-
-				break;
-			}
-		}
+		return "ERROR: Invalid server expression";
 	}
-
-	resultMap.insert({URLDecode(currentKey, true), URLDecode(currentValue, true)});
-
-	return resultMap;
 }
 
-std::map<std::string, std::string> parseQueryString(mg_connection* conn)
+void StaticHandler::sendProcessedPage(mg_connection* conn, const wxFileName& pagePath)
 {
-	const char* queryStringPtr = mg_get_request_info(conn)->query_string;
-	if (queryStringPtr == nullptr) return {};
+	const std::regex serverExpressionRegex("\\[\\[(.*)\\]\\]");
 
-	std::string queryString = queryStringPtr;
-
-	std::string currentKey, currentValue;
-	bool readingValue = false;
-
-	std::map<std::string, std::string> resultMap;
-
-	for (size_t i = 0; i < queryString.size(); ++i)
+	try
 	{
-		switch (queryString[i])
+		std::string pageString = fileReadAll(pagePath);
+		std::stringstream processedStream;
+
+		auto it = std::sregex_iterator(pageString.begin(), pageString.end(), serverExpressionRegex);
+
+		long long lastEndIndex = 0;
+		for(; it != std::sregex_iterator(); ++it)
 		{
-		case '&':
-			readingValue = false;
-			resultMap.insert({URLDecode(currentKey, false), URLDecode(currentValue, false)});
-			currentKey = currentValue = "";
-			break;
-		case '=':
-			readingValue = true;
-			break;
-		default:
-			if (readingValue)
-			{
-				currentValue += queryString[i];
-			}
-			else
-			{
-				currentKey += queryString[i];
-			}
+			processedStream << std::string_view(pageString.c_str() + lastEndIndex, it->position() - lastEndIndex)
+							<< resolveServerExpression(conn, (*it)[1]);
 
-			break;
+			lastEndIndex = it->position() + it->length();
 		}
+
+		processedStream << std::string_view(pageString.c_str() + lastEndIndex, pageString.size() - lastEndIndex);
+
+		std::string processedStr = processedStream.str();
+		mg_send_http_ok(conn, "text/html", processedStr.size());
+		mg_write(conn, processedStr.c_str(), processedStr.size());
 	}
-
-	resultMap.insert({URLDecode(currentKey, false), URLDecode(currentValue, false)});
-
-	return resultMap;
-}
-
-void sendJSONResponse(mg_connection* conn, int status, const nlohmann::json& json)
-{
-	mg_response_header_start(conn, status);
-	mg_response_header_add(conn, "Content-Type", "application/json", -1);
-	mg_response_header_send(conn);
-	std::string jsonString = json.dump();
-	mg_write(conn, jsonString.c_str(), jsonString.size());
-	mg_close_connection(conn);
+	catch (const std::ios::failure&)
+	{
+		mg_send_http_error(conn, 404, "The requested file was not found.");
+	}
 }
 
 bool StaticHandler::handleGet(CivetServer* server, mg_connection* conn)
@@ -152,15 +75,20 @@ bool StaticHandler::handleGet(CivetServer* server, mg_connection* conn)
 		{
 			if (!resolvedPath.HasName())
 			{
-				resolvedPath.SetName("index.html");
+				resolvedPath.SetName("index");
 			}
-			else
-			{
-				resolvedPath.SetName("html");
-			}
+
+			resolvedPath.SetExt("html");
 		}
 
-		mg_send_mime_file(conn, resolvedPath.GetFullPath().c_str(), nullptr);
+		if(resolvedPath.GetExt() == "html")
+		{
+			this->sendProcessedPage(conn, resolvedPath);
+		}
+		else
+		{
+			mg_send_mime_file(conn, resolvedPath.GetFullPath().c_str(), nullptr);
+		}
 	}
 	else
 	{
@@ -193,7 +121,7 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 
 				if (!thisIPBanned)
 				{
-					openAllowed = promptForWebpageOpen(wxAppRef, url, wxT("the IP address ") + senderIP, banRequested);
+					openAllowed = wxAppRef.promptForWebpageOpen(url, wxT("the IP address ") + senderIP, banRequested);
 				}
 
 				if(thisIPBanned || banRequested)
@@ -224,7 +152,7 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 				wxString wxURL = wxString::FromUTF8(postParams["url"]);
 
 				{
-					WriterReadersLock<AppConfig>::ReadableReference readRef(*configLock);
+					WriterReadersLock<AppConfig>::ReadableReference readRef(*wxAppRef.getConfigRef());
 
 					if (readRef->browserID.empty())
 					{
@@ -256,6 +184,7 @@ bool OpenWebpageAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn
 
 
 				mg_send_http_ok(conn, "text/plain", 0);
+				mg_close_connection(conn);
 			}
 			else
 			{
@@ -309,7 +238,7 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	wxFileName defaultDestDir;
 	{
-		WriterReadersLock<AppConfig>::ReadableReference configRef(*configLock);
+		WriterReadersLock<AppConfig>::ReadableReference configRef(*wxAppRef.getConfigRef());
 		defaultDestDir = configRef->fileSavePath;
 	}
 
@@ -326,22 +255,6 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	wxString remoteIP = mg_get_request_info(conn)->remote_addr;
 
-	auto consentDlgLambda = [this, &defaultDestDir, &rqFileInfo, &remoteIP]
-	{
-		auto consentDlg = FileOpenSaveConsentDialog(defaultDestDir, rqFileInfo, this->configLock, wxT("the remote IP ") + remoteIP);
-		consentDlg.Show();
-		consentDlg.RequestUserAttention();
-		auto resultVal = static_cast<FileOpenSaveConsentDialog::ResultCode>(consentDlg.ShowModal());
-		std::vector<wxFileName> consentedFileNames = consentDlg.getConsentedFilenames();
-
-		for(size_t i = 0; i < consentedFileNames.size(); ++i)
-		{
-			rqFileInfo.fileList[i].consentedFileName = consentedFileNames[i];
-		}
-
-		return std::pair{ resultVal, consentDlg.denyFutureRequestsRequested() };
-	};
-
 	FileOpenSaveConsentDialog::ResultCode result;
 	bool denyFuture = false;
 	{
@@ -355,9 +268,7 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 		if (!thisIPBanned)
 		{
-			std::tie(result, denyFuture) = wxCallAfterSync<QuickOpenApplication, decltype(consentDlgLambda),
-				std::pair<FileOpenSaveConsentDialog::ResultCode, bool>>(
-					wxAppRef, consentDlgLambda);
+			std::tie(result, denyFuture) = wxAppRef.promptForFileSave(defaultDestDir, wxT("the IP address ") + remoteIP, rqFileInfo);
 
 			if(denyFuture)
 			{
@@ -399,20 +310,13 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	if (result == FileOpenSaveConsentDialog::ACCEPT)
 	{
-		std::vector<ConsentToken> newTokens;
-		for (const auto& thisFile : rqFileInfo.fileList)
+		ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
 		{
-			// rqFileInfo.consentedFileName = consentDlg.getConsentedFilename();
-			ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
-			newTokens.push_back(newToken);
-
-			{
-				WriterReadersLock<TokenMap>::WritableReference writeRef(tokenWRRef);
-				writeRef->insert({ newToken, thisFile } );
-			}
+			WriterReadersLock<TokenMap>::WritableReference writeRef(tokenWRRef);
+			writeRef->insert({ newToken, rqFileInfo.fileList });
 		}
 
-		sendJSONResponse(conn, 200, nlohmann::json{ {"consentTokens", newTokens} });
+		sendJSONResponse(conn, 200, nlohmann::json{ {"consentToken", newToken } });
 	}
 	else
 	{
@@ -471,11 +375,6 @@ void OpenSaveFileAPIEndpoint::MGStoreBodyChecked(mg_connection* conn, const wxFi
 				uploadActivityEntryRef->setProgress((static_cast<double>(bytesWritten) / targetFileSize) * 100.0);
 			});
 		}
-
-		progressReportingApp.CallAfter([uploadActivityEntryRef]
-		{
-			uploadActivityEntryRef->setCompleted(true);
-		});
 	}
 	catch (const std::ios_base::failure& ex)
 	{
@@ -499,6 +398,13 @@ void OpenSaveFileAPIEndpoint::MGStoreBodyChecked(mg_connection* conn, const wxFi
 	{
 		throw IncorrectFileLengthException();
 	}
+	else
+	{
+		progressReportingApp.CallAfter([uploadActivityEntryRef]
+		{
+			uploadActivityEntryRef->setCompleted(true);
+		});
+	}
 }
 
 bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* conn)
@@ -517,111 +423,176 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 
 	auto queryStringMap = parseQueryString(conn);
 
-	if (queryStringMap.count("consentToken") > 0)
-	{
-		ConsentToken parsedToken = atoll(queryStringMap["consentToken"].c_str());
-		FileConsentRequestInfo::RequestedFileInfo consentedFileInfo;
-		bool fileFound = false;
-
-		{
-			WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
-				tokens(consentServiceRef.tokenWRRef);
-
-			if (tokens->count(parsedToken) > 0)
-			{
-				consentedFileInfo = tokens->at(parsedToken);
-				fileFound = true;
-
-				tokens->erase(parsedToken);
-			}
-		}
-
-		if (fileFound)
-		{
-			/*mg_form_data_handler formDataHandler;
-			formDataHandler.field_found = getFieldInfo;
-			formDataHandler.field_get = nullptr;
-			formDataHandler.field_store = onFileStore;
-			formDataHandler.user_data = &consentedFileInfo;
-			
-
-			mg_handle_form_request(conn, &formDataHandler);*/
-
-			//wxFileName destPath;
-			//{
-			//	WriterReadersLock<AppConfig>::ReadableReference configRef(configLock);
-			//	destPath = wxFileName(configRef->fileSavePath);
-			//	destPath.SetFullName(consentedFileInfo.filename);
-			//}
-
-			// TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = nullptr;
-			std::atomic<bool> cancelFlag = false;
-			auto createActivity = [this, consentedFileInfo, &cancelFlag]
-			{
-				return this->progressReportingApp.getTrayWindow()->addFileUploadActivity(consentedFileInfo.consentedFileName, cancelFlag);
-			};
-
-			TrayStatusWindow::FileUploadActivityEntry* activityEntryRef =
-				wxCallAfterSync<QuickOpenApplication, decltype(createActivity), TrayStatusWindow::
-				                FileUploadActivityEntry*>(progressReportingApp, createActivity);
-
-			try
-			{
-				MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize,
-				                   activityEntryRef, cancelFlag);
-				mg_send_http_ok(conn, "text/plain", 0);
-			}
-			catch (const std::system_error& ex)
-			{
-				auto jsonErrorInfo = nlohmann::json(FormErrorList{
-					{
-						{
-							"uploadFile",
-							std::string("An error occurred while attempting to write the file: ") + ex.what()
-						}
-					}
-				});
-				sendJSONResponse(conn, 500, jsonErrorInfo);
-			}
-			catch (const IncorrectFileLengthException&)
-			{
-				auto jsonErrorInfo = nlohmann::json(FormErrorList{
-					{
-						{"uploadFile", "The file sent did not have the length specified by the consent token used."}
-					}
-				});
-				sendJSONResponse(conn, 400, jsonErrorInfo);
-			}
-			catch (const OperationCanceledException&)
-			{
-				auto jsonErrorInfo = nlohmann::json(FormErrorList{
-					{
-						{"uploadFile", "The upload was canceled by the receiving user."}
-					}
-				});
-				sendJSONResponse(conn, 500, jsonErrorInfo);
-			}
-		}
-		else
-		{
-			// mg_send_http_error(conn, 403, "The consent token provided was not valid.");
-			auto jsonErrorInfo = nlohmann::json(FormErrorList{
-				{
-					{"consentToken", "The consent token provided was not valid."}
-				}
-			});
-			sendJSONResponse(conn, 403, jsonErrorInfo);
-		}
-	}
-	else
+	if (queryStringMap.count("consentToken") == 0)
 	{
 		// mg_send_http_error(conn, 401, "No consent token was provided.");
 		auto jsonErrorInfo = nlohmann::json(FormErrorList{
 			{
 				{"consentToken", "No consent token was provided."}
 			}
-		});
+			});
 		sendJSONResponse(conn, 401, jsonErrorInfo);
+
+		return true;
+	}
+	ConsentToken parsedToken = atoll(queryStringMap["consentToken"].c_str());
+
+
+	if (queryStringMap.count("fileIndex") == 0)
+	{
+		// mg_send_http_error(conn, 401, "No consent token was provided.");
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"fileIndex", "No file index was provided."}
+			}
+			});
+		sendJSONResponse(conn, 400, jsonErrorInfo);
+
+		return true;
+	}
+	long long fileIndex = atoll(queryStringMap["fileIndex"].c_str());
+
+
+	FileConsentRequestInfo::RequestedFileInfo consentedFileInfo;
+	bool tokenValid = false, indexValid = false;
+
+	{
+		WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
+			tokens(consentServiceRef.tokenWRRef);
+
+		if (tokens->count(parsedToken) > 0)
+		{
+			tokenValid = true;
+
+			if (fileIndex >= 0 && fileIndex < tokens->at(parsedToken).size() && !tokens->at(parsedToken).at(fileIndex).uploadStarted)
+			{
+				indexValid = true;
+				tokens->at(parsedToken).at(fileIndex).uploadStarted = true;
+				consentedFileInfo = tokens->at(parsedToken).at(fileIndex);
+			}
+		}
+	}
+
+	if (!tokenValid)
+	{
+		// mg_send_http_error(conn, 403, "The consent token provided was not valid.");
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"consentToken", "The consent token provided was not valid."}
+			}
+			});
+		sendJSONResponse(conn, 403, jsonErrorInfo);
+		return true;
+	}
+
+	if (!indexValid)
+	{
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"fileIndex", "The file index provided was not valid."}
+			}
+			});
+		sendJSONResponse(conn, 403, jsonErrorInfo);
+		return true;
+	}
+
+	/*mg_form_data_handler formDataHandler;
+	formDataHandler.field_found = getFieldInfo;
+	formDataHandler.field_get = nullptr;
+	formDataHandler.field_store = onFileStore;
+	formDataHandler.user_data = &consentedFileInfo;
+	
+
+	mg_handle_form_request(conn, &formDataHandler);*/
+
+	//wxFileName destPath;
+	//{
+	//	WriterReadersLock<AppConfig>::ReadableReference configRef(configLock);
+	//	destPath = wxFileName(configRef->fileSavePath);
+	//	destPath.SetFullName(consentedFileInfo.filename);
+	//}
+
+	// TrayStatusWindow::FileUploadActivityEntry* activityEntryRef = nullptr;
+	std::atomic<bool> cancelFlag = false;
+	auto createActivity = [this, consentedFileInfo, &cancelFlag]
+	{
+		return this->progressReportingApp.getTrayWindow()->addFileUploadActivity(consentedFileInfo.consentedFileName, cancelFlag);
+	};
+
+	TrayStatusWindow::FileUploadActivityEntry* activityEntryRef =
+		wxCallAfterSync<IQuickOpenApplication, decltype(createActivity), TrayStatusWindow::
+		                FileUploadActivityEntry*>(progressReportingApp, createActivity);
+
+	try
+	{
+		MGStoreBodyChecked(conn, consentedFileInfo.consentedFileName, consentedFileInfo.fileSize,
+		                   activityEntryRef, cancelFlag);
+		mg_send_http_ok(conn, "text/plain", 0);
+	}
+	catch (const std::system_error& ex)
+	{
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{
+					"uploadFile",
+					std::string("An error occurred while attempting to write the file: ") + ex.what()
+				}
+			}
+		});
+		sendJSONResponse(conn, 500, jsonErrorInfo);
+	}
+	catch (const IncorrectFileLengthException& ex)
+	{
+		progressReportingApp.CallAfter([activityEntryRef, ex] { activityEntryRef->setError(&ex); });
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"uploadFile", "The file sent did not have the length specified by the consent token used."}
+			}
+		});
+		sendJSONResponse(conn, 400, jsonErrorInfo);
+	}
+	catch (const OperationCanceledException& ex)
+	{
+		auto jsonErrorInfo = nlohmann::json(FormErrorList{
+			{
+				{"uploadFile", "The upload was canceled by the receiving user."}
+			}
+		});
+		sendJSONResponse(conn, 500, jsonErrorInfo);
+	}
+	catch (const ConnectionClosedException& ex)
+	{
+		progressReportingApp.CallAfter([activityEntryRef, ex]{ activityEntryRef->setError(&ex); });
+	}
+
+	bool allEnded = true;
+	size_t fileCount = 0;
+	{
+		WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
+			tokens(consentServiceRef.tokenWRRef);
+		fileCount = tokens->at(parsedToken).size();
+
+		tokens->at(parsedToken).at(fileIndex).uploadEnded = true;
+
+		for(const FileConsentRequestInfo::RequestedFileInfo& thisFile : tokens->at(parsedToken))
+		{
+			if(!thisFile.uploadEnded)
+			{
+				allEnded = false;
+				break;
+			}
+		}
+	}
+
+	if (allEnded)
+	{
+		IQuickOpenApplication& appRef = this->progressReportingApp;
+		this->progressReportingApp.CallAfter([&appRef, fileCount]
+		{
+			appRef.notifyUser(MessageSeverity::MSG_INFO, wxT("File Upload Completed"),
+				wxString() << fileCount << (fileCount > 1 ? wxT(" files were ") : wxT(" file was "))
+				<< wxT("uploaded."));
+		});
 	}
 
 	return true;
@@ -640,4 +611,24 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 	delete[] bodyBuffer;
 	outFile.close();
 	return true;*/
+}
+
+QuickOpenWebServer::QuickOpenWebServer(IQuickOpenApplication& wxAppRef, unsigned port):
+	CivetServer({
+		"document_root", STATIC_PATH.generic_string(),
+		"listening_ports", '+' + std::to_string(port)
+	}),
+	wxAppRef(wxAppRef),
+	staticHandler("/", &this->csrfHandler),
+	webpageAPIEndpoint(wxAppRef, consentDialogMutex, bannedIPs),
+	fileConsentTokenService(consentDialogMutex, wxAppRef, bannedIPs),
+	fileAPIEndpoint(fileConsentTokenService, wxAppRef),
+	bannedIPs(std::make_unique<std::set<wxString>>()),
+	port(port)
+{
+	this->addHandler("/", staticHandler);
+	this->addAuthHandler("/api/", this->csrfHandler);
+	this->addHandler("/api/openWebpage", webpageAPIEndpoint);
+	this->addHandler("/api/openSaveFile", fileAPIEndpoint);
+	this->addHandler("/api/openSaveFile/getConsent", fileConsentTokenService);
 }

@@ -7,4 +7,4 @@
 #define QUICKOPEN_VENDOR "Saaman Khalilollahi"
 #define QUICKOPEN_REPO_URL "https://github.com/picode98/QuickOpen"
 #define QUICKOPEN_SHORT_DESC "QuickOpen: Easily share content with others on your LAN"
-#define QUICKOPEN_LICENSE "Licensing TBD"
+#define QUICKOPEN_LICENSE "Licensed under the MIT License"

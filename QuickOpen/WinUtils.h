@@ -13,6 +13,7 @@
 #include <Wbemidl.h>
 #include <shellapi.h>
 #include <bcrypt.h>
+#include <Psapi.h>
 
 #include <filesystem>
 #include <iostream>
@@ -52,6 +53,7 @@ WindowsException getWinAPIError(LSTATUS retVal);
 void handleWinAPIError(LSTATUS retVal, bool checkGLE = true);
 tstring readRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName);
 void startSubprocess(const wxString& commandLine);
+int startSubprocess(const wxString& exePath, const std::vector<wxString>& args);
 tstring substituteWinShellFormatString(const tstring& format, const std::vector<tstring>& args);
 
 void initializeCOM();
@@ -184,8 +186,7 @@ struct InstallationInfo
 	enum InstallationType
 	{
 		NOT_INSTALLED,
-		INSTALLED_SYSTEM,
-		INSTALLED_USER
+		INSTALLED_SYSTEM
 	};
 
 	InstallationType installType;
@@ -196,3 +197,39 @@ struct InstallationInfo
 
 	static InstallationInfo detectInstallation();
 };
+
+enum StartupEntryState
+{
+	ABSENT,
+	PRESENT,
+	DIFFERENT_APPLICATION
+};
+
+void addUserStartupEntry();
+void removeUserStartupEntry();
+StartupEntryState getStartupEntryState();
+
+inline UINT winGetConfigUpdateMessageID()
+{
+	static UINT msgID = RegisterWindowMessage(TEXT("UpdateConfiguration"));
+	return msgID;
+}
+
+template<typename T>
+std::vector<T> retryUntilLargeEnough(std::function<bool(std::vector<T>&)> attemptFunc, size_t initialSize = 32)
+{
+	std::vector<T> objects(initialSize);
+	bool result = attemptFunc(objects);
+
+	while(!result)
+	{
+		objects.resize(objects.size() * 2);
+		result = attemptFunc(objects);
+	}
+
+	return objects;
+}
+
+const DWORD WINDOW_FOUND = (1 << 29) + 1;
+
+void broadcastConfigUpdate();

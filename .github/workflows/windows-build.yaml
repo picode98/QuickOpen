@@ -27,6 +27,13 @@ jobs:
             - run: |
                 cmake . -Ax64 -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build . --config Release --target package
               shell: bash
+            - run: |
+                ./Tests/Release/test_driver -r junit -o testing_results.xml
+            - name: Publish Test Results
+              uses: EnricoMi/publish-unit-test-result-action/composite@v1
+              if: always()
+              with:
+                files: testing_results.xml
             - name: Archive built executable
               uses: actions/upload-artifact@v2
               with:

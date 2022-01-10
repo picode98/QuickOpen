@@ -23,7 +23,8 @@ public:
 void handleLinuxSystemError(bool errCond);
 
 // void startSubprocess(const wxString& executable, const std::vector<wxString>& args);
-void startSubprocess(const wxString& commandLine);
+pid_t startSubprocess(const wxString& commandLine);
+pid_t startSubprocess(const wxString& exePath, const std::vector<wxString>& args);
 
 wxFileName getAppExecutablePath();
 void shellExecuteFile(const wxFileName& filePath, const wxWindow* window = nullptr);

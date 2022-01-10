@@ -4,6 +4,8 @@
 #include <wx/hyperlink.h>
 #include <wx/url.h>
 
+#include "AppConfig.h"
+#include "AppGUI.h"
 #include "GUIUtils.h"
 #include "PlatformUtils.h"
 
@@ -26,7 +28,8 @@ void TrayStatusWindow::OnShow(wxShowEvent& event)
 {
 	if (event.IsShown())
 	{
-		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 8080);
+		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
+			WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort);
 		bool replaced = topLevelSizer->Replace(URLDisplay, newDisplay);
 		assert(replaced);
 		topLevelPanel->RemoveChild(URLDisplay);
@@ -49,17 +52,20 @@ void TrayStatusWindow::fitActivityListWidth()
 	}
 }
 
-TrayStatusWindow::TrayStatusWindow() : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
+TrayStatusWindow::TrayStatusWindow(IQuickOpenApplication& appRef) : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
 	wxSize(300, 300),
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
-		wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxCLOSE_BOX))
+		wxMINIMIZE_BOX | wxMAXIMIZE_BOX)), appRef(appRef)
 {
+	this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO));
+
 	topLevelPanel = new wxPanel(this);
 	auto* panelSizer = new wxBoxSizer(wxVERTICAL);
 	panelSizer->Add(topLevelPanel, wxSizerFlags(1).Expand());
 
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 8080), wxSizerFlags(0).Expand());
+	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
+		WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort), wxSizerFlags(0).Expand());
 	topLevelSizer->Add(activityList = new ActivityList(topLevelPanel), wxSizerFlags(1).Expand());
 	setSizerWithPadding(topLevelPanel, topLevelSizer);
 	topLevelPanel->Fit();
@@ -97,9 +103,23 @@ void TrayStatusWindow::SetFocus()
 	this->activityList->SetFocus();
 }
 
+void TrayStatusWindow::OnClose(wxCloseEvent& event)
+{
+    if(event.CanVeto())
+    {
+        event.Veto();
+        this->Hide();
+    }
+    else
+    {
+        event.Skip();
+    }
+}
+
 wxBEGIN_EVENT_TABLE(TrayStatusWindow, wxFrame)
 	EVT_ACTIVATE(TrayStatusWindow::OnWindowActivationChanged)
 	EVT_SHOW(TrayStatusWindow::OnShow)
+    EVT_CLOSE(TrayStatusWindow::OnClose)
 wxEND_EVENT_TABLE()
 
 void TrayStatusWindow::WebpageOpenedActivityEntry::OnCopyURLButtonClick(wxCommandEvent& event)

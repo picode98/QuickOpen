@@ -67,15 +67,36 @@ void handleWinAPIError(LSTATUS retVal, bool checkGLE)
 tstring readRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName)
 {
 	SetLastError(ERROR_SUCCESS);
-	HKEY URLAssocHandle = nullptr;
+	HKEY subkeyHandle = nullptr;
 	auto keyType = REG_NONE;
-	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_READ, &URLAssocHandle));
+	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_READ, &subkeyHandle));
 	DWORD reqBufSize(0);
-	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, nullptr, &reqBufSize));
+	handleWinAPIError(RegQueryValueEx(subkeyHandle, valueName.c_str(), nullptr, &keyType, nullptr, &reqBufSize));
 	std::basic_string<BYTE> str(reqBufSize, BYTE(0));
-	handleWinAPIError(RegQueryValueEx(URLAssocHandle, valueName.c_str(), nullptr, &keyType, str.data(), &reqBufSize));
+	handleWinAPIError(RegQueryValueEx(subkeyHandle, valueName.c_str(), nullptr, &keyType, str.data(), &reqBufSize));
 
+	handleWinAPIError(RegCloseKey(subkeyHandle));
 	return tstring(reinterpret_cast<const TCHAR*>(str.c_str()));
+}
+
+void writeRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName, const tstring& value)
+{
+	SetLastError(ERROR_SUCCESS);
+	HKEY subkeyHandle = nullptr;
+	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_SET_VALUE, &subkeyHandle));
+	handleWinAPIError(RegSetValueEx(subkeyHandle, valueName.c_str(), 0, REG_SZ, reinterpret_cast<const BYTE*>(value.c_str()), value.size() * sizeof(TCHAR) + 1));
+
+	handleWinAPIError(RegCloseKey(subkeyHandle));
+}
+
+void removeRegistryValue(HKEY key, const tstring& subkeyName, const tstring& valueName)
+{
+	SetLastError(ERROR_SUCCESS);
+	HKEY subkeyHandle = nullptr;
+	handleWinAPIError(RegOpenKeyEx(key, subkeyName.c_str(), 0, KEY_SET_VALUE, &subkeyHandle));
+	handleWinAPIError(RegDeleteValue(subkeyHandle, valueName.c_str()));
+
+	handleWinAPIError(RegCloseKey(subkeyHandle));
 }
 
 void startSubprocess(const wxString& commandLine)
@@ -102,6 +123,11 @@ void startSubprocess(const wxString& commandLine)
 	CreateProcess(nullptr, commandLineCopy.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
 	              &newProcInfo);
 	handleWinAPIError(ERROR_SUCCESS);
+}
+
+int startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
+{
+    return 0; // TODO
 }
 
 tstring substituteWinShellFormatString(const tstring& format, const std::vector<tstring>& args)
@@ -451,4 +477,122 @@ InstallationInfo InstallationInfo::detectInstallation()
 	return { NOT_INSTALLED, appExePath, appExePath,
 				staticEnvVarSet ? wxFileName(staticEnvVar, "") : (appExePath / wxFileName("../share/QuickOpen", "")) };
 #endif
+}
+
+const tstring USER_STARTUP_SUBKEY = TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+	QUICKOPEN_STARTUP_VALUE_NAME = TEXT("QuickOpen");
+
+void addUserStartupEntry()
+{
+	writeRegistryStringValue(HKEY_CURRENT_USER, USER_STARTUP_SUBKEY, QUICKOPEN_STARTUP_VALUE_NAME,
+		TEXT('"') + wxStringToTString(getAppExecutablePath().GetFullPath()) + TEXT('"'));
+}
+
+void removeUserStartupEntry()
+{
+	removeRegistryValue(HKEY_CURRENT_USER, USER_STARTUP_SUBKEY, QUICKOPEN_STARTUP_VALUE_NAME);
+}
+
+StartupEntryState getStartupEntryState()
+{
+	try
+	{
+		tstring currentValue = readRegistryStringValue(HKEY_CURRENT_USER, USER_STARTUP_SUBKEY, QUICKOPEN_STARTUP_VALUE_NAME);
+		return currentValue == (TEXT('"') + wxStringToTString(getAppExecutablePath().GetFullPath()) + TEXT('"'))
+			? StartupEntryState::PRESENT : StartupEntryState::DIFFERENT_APPLICATION;
+	}
+	catch (const WindowsException& ex)
+	{
+		if(ex.code().value() == ERROR_FILE_NOT_FOUND)
+		{
+			return StartupEntryState::ABSENT;
+		}
+		else
+		{
+			throw;
+		}
+	}
+}
+
+void broadcastConfigUpdate()
+{
+	//DWORD bytesWritten;
+	//std::vector<DWORD> PIDs = retryUntilLargeEnough<DWORD>([&bytesWritten](std::vector<DWORD>& currentVec)
+	//{
+	//	EnumProcesses(currentVec.data(), currentVec.size() * sizeof(DWORD), &bytesWritten);
+	//	return bytesWritten < currentVec.size() * sizeof(DWORD);
+	//});
+	//PIDs.resize(bytesWritten / sizeof(DWORD));
+
+	//for(DWORD thisPID : PIDs)
+	//{
+	//	HANDLE procHandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, thisPID);
+	//	QueryFullProcessImageName(procHandle, PROCESS_NAME_NATIVE, )
+	//}
+	/*BOOL result = EnumWindows([](HWND hwnd, LPARAM lParam)
+	{
+		try
+		{
+			DWORD thisPID;
+			GetWindowThreadProcessId(hwnd, &thisPID);
+			HANDLE procHandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, thisPID);
+
+			DWORD bytesWritten;
+			std::vector<TCHAR> filenameBuf = retryUntilLargeEnough<TCHAR>([&procHandle, &bytesWritten](std::vector<TCHAR>& charBuf)
+			{
+				bytesWritten = charBuf.size();
+				if (QueryFullProcessImageName(procHandle, 0, charBuf.data(), &bytesWritten) == 0 && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+				{
+					handleWinAPIError(0);
+				}
+
+				return (bytesWritten + 1) <= charBuf.size();
+			});
+
+			auto procFilename = wxFileName(wxString(filenameBuf.data()));
+
+			if (procFilename == getAppExecutablePath())
+			{
+				tstring targetTitle = TEXT("Main Window");
+				std::vector<TCHAR> buf(targetTitle.size() + 1);
+
+				SendMessage(hwnd, WM_GETTEXT, buf.size(), reinterpret_cast<LPARAM>(buf.data()));
+
+				if (tstring(buf.data()) == targetTitle)
+				{
+					SendMessage(hwnd, winGetConfigUpdateMessageID(), 0, 0);
+					SetLastError(WINDOW_FOUND);
+				}
+			}
+		}
+		catch(const WindowsException& ex)
+		{
+			if(ex.code().value() != ERROR_ACCESS_DENIED)
+			{
+				throw;
+			}
+		}
+		return TRUE;
+
+	}, 0);
+
+	if (result == 0)
+	{
+		if (GetLastError() == WINDOW_FOUND)
+		{
+			return true;
+		}
+		else
+		{
+			handleWinAPIError(0);
+			return false;
+		}
+	}
+	else
+	{
+		return false;
+	}*/
+
+	SendMessage(HWND_BROADCAST, winGetConfigUpdateMessageID(), 0, 0);
+	handleWinAPIError(0);
 }

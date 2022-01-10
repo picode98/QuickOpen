@@ -1,0 +1,20 @@
+<CPackWiXPatch>
+    <CPackWiXFragment Id="#PRODUCTFEATURE">
+        <Component Id="RegistryEntries" Directory="TARGETDIR" Guid="7655C476-0AC6-4756-8E29-2FEB110817EB">
+            <RegistryKey Root="HKCR"
+                         Key="Directory\shell\SetQuickOpenDestination">
+                <RegistryValue Type="string" Value="Set default destination for QuickOpen"/>
+                <RegistryKey Key="command">
+                    <RegistryValue Type="string" Value='"[INSTALL_ROOT]bin\QuickOpen.exe" --set-default-upload-folder "%V>"'/>
+                </RegistryKey>
+            </RegistryKey>
+            <RegistryKey Root="HKCR"
+                         Key="Directory\Background\shell\SetQuickOpenDestination">
+                <RegistryValue Type="string" Value="Set default destination for QuickOpen"/>
+                <RegistryKey Key="command">
+                    <RegistryValue Type="string" Value='"[INSTALL_ROOT]bin\QuickOpen.exe" --set-default-upload-folder "%V>"'/>
+                </RegistryKey>
+            </RegistryKey>
+        </Component>
+    </CPackWiXFragment>
+</CPackWiXPatch>

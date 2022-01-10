@@ -1,6 +1,7 @@
 <HTML>
 <HEAD>
     <META NAME="GENERATOR" Content="Microsoft Visual Studio">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <style type="text/css">
         .form-error {
             border: 2px solid red;
@@ -33,7 +34,10 @@
     <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.js"></script>
     <script type="text/javascript" src="file_picker.js"></script>
     <script type="text/javascript">
-        $(() => {
+        $(() =>
+        {
+            const CSRF_TOKEN = "[[CSRF_TOKEN]]";
+
             function resetFormErrors(formElement)
             {
                 $(formElement).find('*').removeClass('form-error');
@@ -53,10 +57,10 @@
                 });
             }
 
-            function uploadFile(fileList, consentTokenList, index)
+            function uploadFile(fileList, consentToken, index)
             {
                 $.post({
-                    url: '/api/openSaveFile?consentToken=' + consentTokenList[index],
+                    url: `/api/openSaveFile?csrfToken=${CSRF_TOKEN}&consentToken=${consentToken}&fileIndex=${index}`,
                     data: fileList[index],
                     contentType: 'application/octet-stream',
                     processData: false,
@@ -69,7 +73,7 @@
                                 if (progressEvt.lengthComputable)
                                 {
                                     let currentProgress = (progressEvt.loaded / progressEvt.total) * 100.0;
-                                    $('#file-upload-status-text').text(`Uploading file "${fileList[index].filename}" (File ${index + 1} of ${fileList.length}, ${currentProgress.toFixed(1)}% complete)...`);
+                                    $('#file-upload-status-text').text(`Uploading file "${fileList[index].name}" (File ${index + 1} of ${fileList.length}, ${currentProgress.toFixed(1)}% complete)...`);
                                 }
                             });
                         return newXHR;
@@ -89,7 +93,7 @@
                     }
                     else
                     {
-                        uploadFile(fileList, consentTokenList, index + 1);
+                        uploadFile(fileList, consentToken, index + 1);
                     }
                 });
             }
@@ -98,8 +102,8 @@
             {
                 for (item of dataTransferItemList)
                 {
-                    if ((item.webkitGetAsEntry && item.webkitGetAsEntry().isDirectory === true)
-                        || (item.getAsEntry && item.getAsEntry().isDirectory === true))
+                    if (item.kind === 'file' && ((item.webkitGetAsEntry && item.webkitGetAsEntry().isDirectory === true)
+                        || (item.getAsEntry && item.getAsEntry().isDirectory === true)))
                     {
                         return true;
                     }
@@ -116,7 +120,7 @@
 
                 resetFormErrors($('#open-webpage-form'));
 
-                $.post('/api/openWebpage', { url: $('#url-text-input').val() }).done(() => {
+                $.post('/api/openWebpage?csrfToken=' + CSRF_TOKEN, { url: $('#url-text-input').val() }).done(() => {
                     $('#open-webpage-result-text').text('Webpage opened successfully.');
                 }).fail((jqXHR, textStatus, errorThrown) =>
                 {
@@ -137,13 +141,13 @@
                 // let formData = new FormData($('#open-save-file-form')[0]);
                 let files = $('#file-upload-input').multiFilePicker('getFiles');
                 $.post({
-                    url: '/api/openSaveFile/getConsent',
+                    url: '/api/openSaveFile/getConsent?csrfToken=' + CSRF_TOKEN,
                     data: JSON.stringify({ fileList: files.map(thisFile => { return { "filename": thisFile.name, "fileSize": thisFile.size } }) }),
                     contentType: 'application/json'
                 }).done(data =>
                 {
                     $('#file-upload-status-text').text('Starting upload...');
-                    uploadFile(files, data.consentTokens, 0);
+                    uploadFile(files, data.consentToken, 0);
 
                 }).fail((jqXHR, textStatus, errorThrown) =>
                 {
@@ -217,7 +221,7 @@
     <TITLE>QuickOpen</TITLE>
 </HEAD>
 <BODY>
-<h1>QuickOpen</h1>
+<img src="QuickOpen_full_logo.svg" style="height: 100px;" alt="QuickOpen" />
 <p>Enter a URL below to open it:</p>
 <div class="page-drop-target" style="display: none;">Drop a URL or file here</div>
 <form id="open-webpage-form">

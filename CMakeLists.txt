@@ -2,13 +2,22 @@
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.20)
-set(CPACK_BINARY_ZIP "ON")
-set(CPACK_BINARY_DEB "ON")
-set(CPACK_BINARY_WIX "ON")
-set(CPACK_BINARY_NSIS "OFF")
+
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP;WIX")
+elseif(UNIX)
+    set(CPACK_GENERATOR "ZIP;DEB")
+else()
+    set(CPACK_GENERATOR "ZIP")
+endif()
 
 set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/pkg")
 set(CPACK_PACKAGE_EXECUTABLES "QuickOpen;QuickOpen")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE.txt")
+
+set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/MSICustomActions.xml")
+
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_SOURCE_DIR}/debian/postinst;${CMAKE_SOURCE_DIR}/debian/prerm;${CMAKE_SOURCE_DIR}/debian/copyright")
 
 # set(wxWidgets_ROOT_DIR ${VCPKG_ROOT}/installed/x64-windows)
 
@@ -53,7 +62,9 @@ if(DEFINED upgradeUUID)
 endif()
 
 # Include sub-projects.
-add_subdirectory ("QuickOpen")
+add_subdirectory("QuickOpen")
+add_subdirectory("Tests")
+add_subdirectory("NautilusExt")
 
 include(InstallRequiredSystemLibraries)
 include(CPack)

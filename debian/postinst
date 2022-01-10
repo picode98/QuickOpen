@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+case $1 in
+  "configure")
+    nautExtDir="$(find /usr/lib -regex '.*nautilus/extensions-3.0')"
+    ret=0
+    output=$(ln -s "${DPKG_ROOT}/usr/lib/libQuickOpenNautilusExt.so" "${nautExtDir}/libQuickOpenNautilusExt.so" 2>&1 ) || ret=$?
+    if [ -$ret -ne 0 ] && echo "${output}" | grep -v "File exists"; then
+      echo "Creating symbolic link failed: ${output}" >&2
+      exit 1
+    fi
+esac
