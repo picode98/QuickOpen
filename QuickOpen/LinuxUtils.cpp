@@ -2,6 +2,8 @@
 // Created by sdk on 8/30/21.
 //
 
+#include <wx/stdpaths.h>
+
 #include "LinuxUtils.h"
 #include "Utils.h"
 
@@ -230,7 +232,12 @@ InstallationInfo InstallationInfo::detectInstallation()
 
 	if (thisFolder.GetDirs().Last() == wxT("bin"))
 	{
-		return { INSTALLED_PACKAGE, thisFolder, thisFolder / wxFileName("../etc/QuickOpen", ""),
+        wxFileName userConfDir = wxFileName(wxStandardPaths::Get().GetUserConfigDir(), "") / wxFileName("./.config", "");
+        if(!userConfDir.DirExists()) userConfDir.Mkdir();
+        userConfDir.AppendDir("QuickOpen");
+        if(!userConfDir.DirExists()) userConfDir.Mkdir();
+
+		return { INSTALLED_PACKAGE, thisFolder, userConfDir,
 			staticEnvVarSet ? wxFileName(staticEnvVar, "") : (thisFolder / wxFileName("../share/QuickOpen", "")) };
 	}
 	else
