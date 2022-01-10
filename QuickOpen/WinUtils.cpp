@@ -125,6 +125,11 @@ void startSubprocess(const wxString& commandLine)
 	handleWinAPIError(ERROR_SUCCESS);
 }
 
+int startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
+{
+    return 0; // TODO
+}
+
 tstring substituteWinShellFormatString(const tstring& format, const std::vector<tstring>& args)
 {
 	tstring resultStr, currentNumStr;

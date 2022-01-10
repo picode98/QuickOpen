@@ -53,6 +53,7 @@ WindowsException getWinAPIError(LSTATUS retVal);
 void handleWinAPIError(LSTATUS retVal, bool checkGLE = true);
 tstring readRegistryStringValue(HKEY key, const tstring& subkeyName, const tstring& valueName);
 void startSubprocess(const wxString& commandLine);
+int startSubprocess(const wxString& exePath, const std::vector<wxString>& args);
 tstring substituteWinShellFormatString(const tstring& format, const std::vector<tstring>& args);
 
 void initializeCOM();

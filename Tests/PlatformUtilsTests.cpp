@@ -2,6 +2,7 @@
 // Created by sdk on 1/8/22.
 //
 
+#include "Utils.h"
 #include "PlatformUtils.h"
 #include "catch.hpp"
 
