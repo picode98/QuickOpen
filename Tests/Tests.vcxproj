@@ -150,6 +150,7 @@
     <ClCompile Include="..\QuickOpen\Utils.cpp" />
     <ClCompile Include="..\QuickOpen\WebServer.cpp" />
     <ClCompile Include="..\QuickOpen\WebServerUtils.cpp" />
+    <ClCompile Include="PlatformUtilsTests.cpp" />
     <ClCompile Include="TestMain.cpp" />
     <ClCompile Include="UtilsTests.cpp" />
     <ClCompile Include="WebServerTests.cpp" />

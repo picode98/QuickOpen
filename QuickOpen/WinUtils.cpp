@@ -99,7 +99,7 @@ void removeRegistryValue(HKEY key, const tstring& subkeyName, const tstring& val
 	handleWinAPIError(RegCloseKey(subkeyHandle));
 }
 
-void startSubprocess(const wxString& commandLine)
+DWORD startSubprocess(const wxString& commandLine)
 {
 	// See https://docs.microsoft.com/en-us/windows/win32/procthread/creating-processes
 	STARTUPINFO startupInfo;
@@ -123,11 +123,27 @@ void startSubprocess(const wxString& commandLine)
 	CreateProcess(nullptr, commandLineCopy.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
 	              &newProcInfo);
 	handleWinAPIError(ERROR_SUCCESS);
+
+	return newProcInfo.dwProcessId;
 }
 
-int startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
+inline wxString escapeArg(const wxString& arg)
 {
-    return 0; // TODO
+	auto argCopy = arg;
+	argCopy.Replace(wxT('"'), wxT("\\\""));
+	return wxT('"') + argCopy + wxT('"');
+}
+
+DWORD startSubprocess(const wxString& exePath, const std::vector<wxString>& args)
+{
+	wxString commandLine = escapeArg(exePath);
+
+	for(const wxString& thisArg : args)
+	{
+		commandLine += wxT(' ') + escapeArg(thisArg);
+	}
+
+	return startSubprocess(commandLine);
 }
 
 tstring substituteWinShellFormatString(const tstring& format, const std::vector<tstring>& args)
@@ -312,7 +328,17 @@ void openExplorerFolder(const wxFileName& folder, const wxFileName* selectedFile
 
 void initializeCOM()
 {
-	handleWinAPIError(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
+	HRESULT initResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+	if(initResult == S_FALSE)
+	{
+		CoUninitialize();
+		return;
+	}
+	else if(initResult != S_OK)
+	{
+		handleWinAPIError(initResult);
+	}
 
 	try
 	{
@@ -328,7 +354,7 @@ void initializeCOM()
 
 WMIResultIterator runWMIQuery(const wxString& wmiNamespace, const wxString& query)
 {
-	// initializeCOM();
+	initializeCOM();
 	SetLastError(ERROR_SUCCESS);
 
 	IWbemLocator* wmiLocator = nullptr;
@@ -440,6 +466,7 @@ InstallationInfo InstallationInfo::detectInstallation()
 {
 	wxFileName appExePath = getAppExecutablePath();
 	appExePath.SetName("");
+	appExePath.SetExt("");
 
 	wxString staticEnvVar;
 	bool staticEnvVarSet = wxGetEnv(wxT("QUICKOPEN_DATA_DIR"), &staticEnvVar);

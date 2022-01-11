@@ -26,7 +26,12 @@ TEST_CASE("getAppExecutablePath function")
 
 TEST_CASE("startSubprocess function")
 {
-    auto procPID = startSubprocess(wxT("sh"), { wxT("-c"), wxT("sleep 3") });
+#ifdef WIN32
+	auto procPID = startSubprocess(wxT("cmd.exe"), { wxT("/c"), wxT("timeout"), wxT("3") });
+#else
+	auto procPID = startSubprocess(wxT("sh"), { wxT("-c"), wxT("sleep 3") });
+#endif
+
     REQUIRE(procPID > 0);
     REQUIRE(wxProcess::Exists(procPID));
 }

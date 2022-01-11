@@ -138,6 +138,7 @@
     <ClCompile Include="AppConfig.cpp" />
     <ClCompile Include="AppGUI.cpp" />
     <ClCompile Include="GUIUtils.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="ManagementServer.cpp" />
     <ClCompile Include="PlatformUtils.cpp" />
     <ClCompile Include="TrayStatusWindow.cpp" />
