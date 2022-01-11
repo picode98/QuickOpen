@@ -32,6 +32,7 @@ jobs:
             - run: |
                 "/c/Program Files/7-Zip/7z.exe" x "pkg/QuickOpen*.zip" -otest_install
                 ./test_install/QuickOpen*/bin/test_driver -r junit -o testing_results.xml
+              shell: bash
             - name: Publish Test Results
               uses: EnricoMi/publish-unit-test-result-action/composite@v1
               if: always()
