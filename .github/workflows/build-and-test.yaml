@@ -36,8 +36,13 @@ jobs:
                 setupOnly: true
             - name: Install dependency packages
               env:
+                JOB_OS: ${{ matrix.os }}
                 VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_target_triplet }}
               run: |
+                if([ "$JOB_OS" = "ubuntu-20.04" ]); then
+                    sudo apt-get install -y libgtk-3-dev
+                fi
+                
                 $VCPKG_ROOT/vcpkg install wxwidgets:$VCPKG_TARGET_TRIPLET nlohmann-json:$VCPKG_TARGET_TRIPLET civetweb:$VCPKG_TARGET_TRIPLET catch2:$VCPKG_TARGET_TRIPLET
               shell: bash
             - name: Archive dependency build logs
