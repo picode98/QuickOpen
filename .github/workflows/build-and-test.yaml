@@ -53,9 +53,10 @@ jobs:
                 path: vcpkg/buildtrees/**/*.log
             - name: Configure and build CMake project
               env:
+                JOB_OS: ${{ matrix.os }}
                 VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_target_triplet }}
               run: |
-                cmake . -Ax64 -DVCPKG_TARGET_TRIPLET=$VCPKG_TARGET_TRIPLET -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build . --config Release --target package
+                cmake . $([[ "$JOB_OS" == *"windows"* ]] && printf %s "-Ax64") -DVCPKG_TARGET_TRIPLET=$VCPKG_TARGET_TRIPLET -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build . --config Release --target package
               shell: bash
             - run: |
                 unzip pkg/QuickOpen*.zip -d ./test_install
@@ -66,6 +67,7 @@ jobs:
               if: always()
               with:
                 files: testing_results.xml
+                check_name: "Test Results (${{ matrix.os }})"
             - name: Archive built binaries
               uses: actions/upload-artifact@v2
               with:
