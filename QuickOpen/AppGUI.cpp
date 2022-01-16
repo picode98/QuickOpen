@@ -160,6 +160,15 @@ QuickOpenSettings(IQuickOpenApplication& appRef): wxFrame(nullptr, wxID_ANY, wxT
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
+	systemGroupSizer->Add(
+		makeLabeledSizer(serverPortCtrl = new wxSpinCtrl(topLevelPanel, wxID_ANY,
+		(config->serverPort.isSet() ? (wxString() << config->serverPort) : wxString()), wxDefaultPosition,
+			wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535),
+			wxString(wxT("Server port (use 0 for default port (")) << decltype(config->serverPort)::DEFAULT_VALUE << wxT(")):"), topLevelPanel),
+		wxSizerFlags(0).Expand());
+
+	systemGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+
 	this->runAtStartupCheckbox = new wxCheckBox(topLevelPanel, wxID_ANY, wxT("Run QuickOpen at startup"));
 	this->systemGroupSizer->Add(runAtStartupCheckbox);
 
@@ -249,10 +258,14 @@ QuickOpenSettings(IQuickOpenApplication& appRef): wxFrame(nullptr, wxID_ANY, wxT
 	customBrowserCommandText->SetValue(config->customBrowserPath);
 	this->customBrowserFileBrowseButton = new wxButton(topLevelPanel, wxID_ANY, wxT("Browse..."));
 	customBrowserFileBrowseButton->Bind(wxEVT_BUTTON, &QuickOpenSettings::OnCustomBrowserBrowseButtonClicked, this);
-	this->customBrowserSizer = new wxBoxSizer(wxHORIZONTAL);
-	customBrowserSizer->Add(customBrowserCommandText, wxSizerFlags(1).Expand());
+	this->customBrowserSizer = new wxBoxSizer(wxVERTICAL);
+	auto* customBrowserSelectionSizer = new wxBoxSizer(wxHORIZONTAL);
+	customBrowserSelectionSizer->Add(customBrowserCommandText, wxSizerFlags(1).Expand());
+	customBrowserSelectionSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
+	customBrowserSelectionSizer->Add(customBrowserFileBrowseButton);
+	customBrowserSizer->Add(customBrowserSelectionSizer, wxSizerFlags(0).Expand());
 	customBrowserSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
-	customBrowserSizer->Add(customBrowserFileBrowseButton);
+	customBrowserSizer->Add(new wxStaticText(topLevelPanel, wxID_ANY, wxT("Available placeholders/macros:\n$url - URL to be opened")));
 	webpageOpenGroupSizer->Add(customBrowserSizer, wxSizerFlags(0).Expand().Border(wxTOP, DEFAULT_CONTROL_SPACING));
 
 	topLevelSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
@@ -260,13 +273,6 @@ QuickOpenSettings(IQuickOpenApplication& appRef): wxFrame(nullptr, wxID_ANY, wxT
 	this->fileOpenSaveGroup = new wxStaticBox(topLevelPanel, wxID_ANY, wxT("Opening/Saving Files"));
 	this->fileOpenSaveGroupSizer = new wxStaticBoxSizer(fileOpenSaveGroup, wxVERTICAL);
 	topLevelSizer->Add(fileOpenSaveGroupSizer, wxSizerFlags(0).Expand());
-
-	fileOpenSaveGroupSizer->Add(
-		makeLabeledSizer(serverPortCtrl = new wxSpinCtrl(topLevelPanel, wxID_ANY,
-									(config->serverPort.isSet() ? (wxString() << config->serverPort) : wxString()), wxDefaultPosition,
-		                                wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535),
-		                 wxString(wxT("Server port (default: ")) << decltype(config->serverPort)::DEFAULT_VALUE << wxT(")"), topLevelPanel),
-		wxSizerFlags(0).Expand());
 
 	fileOpenSaveGroupSizer->AddSpacer(DEFAULT_CONTROL_SPACING);
 
