@@ -40,6 +40,11 @@ jobs:
               run: |
                 $VCPKG_ROOT/vcpkg install wxwidgets:$VCPKG_TARGET_TRIPLET nlohmann-json:$VCPKG_TARGET_TRIPLET civetweb:$VCPKG_TARGET_TRIPLET catch2:$VCPKG_TARGET_TRIPLET
               shell: bash
+            - name: Archive dependency build logs
+              uses: actions/upload-artifact@v2
+              with:
+                name: "${{ matrix.os }} dependency build logs"
+                path: vcpkg/buildtrees/**/*.log
             - name: Configure and build CMake project
               env:
                 VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_target_triplet }}
