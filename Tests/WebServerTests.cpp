@@ -25,14 +25,14 @@ TEST_CASE("StaticHandler class - happy path")
 
 	SECTION("happy path")
 	{
-		testConn.requestInfo = { "", "/static/image.png", "::1" };
+		testConn.requestInfo = mg_request_info { "", "/static/image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.size() == 1);
 		REQUIRE(wxFileName(testConn.sentFiles[0].first) == expectedStaticBase / wxFileName(".", "image.png"));
 	}
 	SECTION("unhappy path - path outside of static root")
 	{
-		testConn.requestInfo = { "", "/some_dir/image.png", "::1" };
+		testConn.requestInfo = mg_request_info { "", "/some_dir/image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.empty());
 		REQUIRE(testConn.responseStatus.has_value());
@@ -40,7 +40,7 @@ TEST_CASE("StaticHandler class - happy path")
 	}
 	SECTION("unhappy path - path with .. symbols")
 	{
-		testConn.requestInfo = { "", "/static/../image.png", "::1" };
+		testConn.requestInfo = mg_request_info { "", "/static/../image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.empty());
 		REQUIRE(testConn.responseStatus.has_value());
@@ -128,7 +128,7 @@ TEST_CASE("OpenWebpageAPIEndpoint tests")
 	auto bannedSetLock = WriterReadersLock(std::make_unique<std::set<wxString>>());
 	std::mutex dlgMutex;
 	mg_connection testConn;
-	testConn.requestInfo = { "", "/api/openWebpage", "::1" };
+	testConn.requestInfo = mg_request_info { "", "/api/openWebpage", "::1" };
 
 	SECTION("happy path")
 	{
@@ -186,7 +186,7 @@ TEST_CASE("OpenWebpageAPIEndpoint tests")
 		wxTestApp.promptedForWebpage = false;
 
 		mg_connection testConn2;
-		testConn2.requestInfo = { "", "/api/openWebpage", "::1" };
+		testConn2.requestInfo = mg_request_info { "", "/api/openWebpage", "::1" };
 		testConn2.inputBuffer = "url=http://example.com";
 		REQUIRE(endpoint.handlePost(&testServer, &testConn2));
 		REQUIRE(testConn2.responseStatus == 403);
@@ -221,7 +221,7 @@ TEST_CASE("FileConsentTokenService tests")
 	auto bannedSetLock = WriterReadersLock(std::make_unique<std::set<wxString>>());
 	std::mutex dlgMutex;
 	mg_connection testConn;
-	testConn.requestInfo = { "", "/api/saveFile", "::1" };
+	testConn.requestInfo = mg_request_info { "", "/api/saveFile", "::1" };
 
 	SECTION("happy path")
 	{
@@ -292,7 +292,7 @@ TEST_CASE("FileConsentTokenService tests")
 		wxTestApp.promptedForFileSave = false;
 
 		mg_connection testConn2;
-		testConn2.requestInfo = { "", "/api/saveFile", "::1" };
+		testConn2.requestInfo = mg_request_info { "", "/api/saveFile", "::1" };
 		testConn2.inputBuffer = testFileInfo;
 
 		REQUIRE(endpoint.handlePost(&testServer, &testConn2));
