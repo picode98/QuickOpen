@@ -44,6 +44,10 @@ jobs:
                 fi
                 
                 $VCPKG_ROOT/vcpkg install wxwidgets:$VCPKG_TARGET_TRIPLET nlohmann-json:$VCPKG_TARGET_TRIPLET civetweb:$VCPKG_TARGET_TRIPLET catch2:$VCPKG_TARGET_TRIPLET
+                
+                if([ "$JOB_OS" = "ubuntu-20.04" ]); then
+                    sed --follow-symlinks -r -i "s/\S+.a>\s*//g" ./vcpkg/packages/wxwidgets*/tools/wxwidgets/wx-config
+                fi
               shell: bash
             - name: Archive dependency build logs
               uses: actions/upload-artifact@v2
