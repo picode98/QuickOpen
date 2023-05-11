@@ -10,7 +10,7 @@ set_property(TARGET test_driver PROPERTY COMPILE_DEFINITIONS "MOCK_CIVETWEB=1")
 
 apply_QuickOpen_build_settings(test_driver)
 
-target_link_libraries(test_driver PRIVATE Catch2::Catch2)
+target_link_libraries(test_driver PRIVATE Catch2::Catch2WithMain)
 
 install(TARGETS test_driver RUNTIME DESTINATION bin)
 

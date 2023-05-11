@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "wxwidgets",
+    "civetweb",
+    "nlohmann-json",
+    "catch2"
+  ]
+}
