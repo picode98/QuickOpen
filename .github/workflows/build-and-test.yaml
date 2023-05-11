@@ -42,10 +42,6 @@ jobs:
                 if([ "$JOB_OS" = "ubuntu-20.04" ]); then
                     sudo apt-get install -y libgtk-3-dev
                 fi
-                
-                if([ "$JOB_OS" = "ubuntu-20.04" ]); then
-                    sed --follow-symlinks -r -i "s/\S+.a>\s*//g" ./vcpkg/packages/wxwidgets*/tools/wxwidgets/wx-config
-                fi
               shell: bash
             - name: Archive dependency build logs
               uses: actions/upload-artifact@v2
@@ -66,12 +62,13 @@ jobs:
               shell: bash
             - name: Publish Test Results
               uses: EnricoMi/publish-unit-test-result-action/composite@v1
-              if: always()
+              if: success() || failure()
               with:
                 files: testing_results.xml
                 check_name: "Test Results (${{ matrix.os }})"
             - name: Archive built binaries
               uses: actions/upload-artifact@v2
+              if: success() || failure()
               with:
                 name: ${{ matrix.artifact_name }}
                 path: pkg/QuickOpen*
