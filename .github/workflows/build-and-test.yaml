@@ -3,6 +3,7 @@ on:
     push:
         branches:
             - main
+            - github-actions-debug
 permissions:
     contents: read
     checks: write
@@ -13,14 +14,11 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [windows-2019, ubuntu-20.04]
+                os: [windows-2019]
                 include:
                     - os: windows-2019
                       vcpkg_target_triplet: x64-windows
                       artifact_name: "QuickOpen Windows Binaries (x64)"
-                    - os: ubuntu-20.04
-                      vcpkg_target_triplet: x64-linux
-                      artifact_name: "QuickOpen Linux Binaries (x64)"
         runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v2
@@ -72,3 +70,6 @@ jobs:
               with:
                 name: ${{ matrix.artifact_name }}
                 path: pkg/QuickOpen*
+            - name: Setup tmate session for debugging
+              uses: mxschmitt/action-tmate@v3
+              if: success() || failure()
