@@ -58,6 +58,7 @@ jobs:
               shell: bash
             - run: |
                 unzip pkg/QuickOpen*.zip -d ./test_install
+                sleep 10
                 ./test_install/QuickOpen*/bin/test_driver -r junit -o testing_results.xml
               shell: bash
             - name: Publish Test Results
