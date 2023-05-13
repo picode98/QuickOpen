@@ -11,7 +11,7 @@ macro(apply_QuickOpen_build_settings target_name)
     target_link_libraries(${target_name} PRIVATE civetweb::civetweb civetweb::civetweb-cpp)
 
     if(MSVC)
-        target_link_libraries(${target_name} PRIVATE "bcrypt.lib" "wbemuuid.lib")
+        target_link_libraries(${target_name} PRIVATE "bcrypt.lib" "wbemuuid.lib" "dbghelp.lib")
         set_property(TARGET ${target_name} PROPERTY VS_DPI_AWARE ON)
     endif()
 

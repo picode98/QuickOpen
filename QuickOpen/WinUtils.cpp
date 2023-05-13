@@ -6,6 +6,32 @@
 
 #include <map>
 
+#include <dbghelp.h>
+
+void writeCoreDump()
+{
+    MINIDUMP_EXCEPTION_INFORMATION exceptionInfo;
+    EXCEPTION_POINTERS ptrs;
+    EXCEPTION_RECORD record;
+    CONTEXT ctx;
+    RtlCaptureContext(&ctx);
+    ZeroMemory(&record, sizeof(EXCEPTION_RECORD));
+    record.ExceptionAddress = (void*)ctx.Rip;
+    record.ExceptionCode = EXCEPTION_BREAKPOINT;
+    ptrs.ContextRecord = &ctx;
+    ptrs.ExceptionRecord = &record;
+
+    exceptionInfo.ThreadId = GetCurrentThreadId();
+    exceptionInfo.ExceptionPointers = &ptrs;
+    exceptionInfo.ClientPointers = FALSE;
+
+    auto hFile = CreateFile(TEXT("core.dmp"), GENERIC_WRITE, FILE_SHARE_READ, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
+                      MINIDUMP_TYPE(MiniDumpWithIndirectlyReferencedMemory | MiniDumpScanMemory),
+                      &exceptionInfo, nullptr, nullptr);
+    CloseHandle(hFile);
+}
+
 std::wstring UTF8StrToWideStr(const std::string& UTF8Str)
 {
 	int reqBufSize = MultiByteToWideChar(CP_UTF8, 0, UTF8Str.c_str(), UTF8Str.size(), nullptr, 0);
@@ -63,8 +89,7 @@ void handleWinAPIError(LSTATUS retVal, bool checkGLE)
         if (error.code().value() == ERROR_TOO_MANY_POSTS)
         {
             std::cout << "Caught error. Triggering core dump..." << std::endl;
-            auto size = reinterpret_cast<tstring*>(0)->size();
-            std::cout << size;
+            writeCoreDump();
         }
 		throw error;
 	}
