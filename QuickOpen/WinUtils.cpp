@@ -60,6 +60,12 @@ void handleWinAPIError(LSTATUS retVal, bool checkGLE)
 
 	if (error.code().value() != ERROR_SUCCESS)
 	{
+        if (error.code().value() == ERROR_TOO_MANY_POSTS)
+        {
+            std::cout << "Caught error. Triggering core dump..." << std::endl;
+            auto size = reinterpret_cast<tstring*>(0)->size();
+            std::cout << size;
+        }
 		throw error;
 	}
 }

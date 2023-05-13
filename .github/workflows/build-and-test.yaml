@@ -40,6 +40,10 @@ jobs:
                 if([ "$JOB_OS" = "ubuntu-20.04" ]); then
                     sudo apt-get install -y libgtk-3-dev
                 fi
+                
+                if([ "$JOB_OS" == *"windows"* ]); then
+                    REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
+                fi
               shell: bash
             - name: Archive dependency build logs
               uses: actions/upload-artifact@v2
