@@ -120,9 +120,12 @@ DWORD startSubprocess(const wxString& commandLine)
 	std::wcout << L"Creating process " << commandLineCopy << std::endl;
 
 	SetLastError(ERROR_SUCCESS);
-	CreateProcess(nullptr, commandLineCopy.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
-	              &newProcInfo);
-	handleWinAPIError(ERROR_SUCCESS);
+
+    if(CreateProcess(nullptr, commandLineCopy.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
+	              &newProcInfo) == 0)
+    {
+        throw getWinAPIError(GetLastError());
+    }
 
 	return newProcInfo.dwProcessId;
 }
