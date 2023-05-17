@@ -1,6 +1,6 @@
 #include "WebServer.h"
 #include "WebServerUtils.h"
-#include "AppGUI.h"
+#include "GUIUtils.h"
 #include "Utils.h"
 
 #include <regex>
@@ -255,7 +255,7 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 
 	wxString remoteIP = mg_get_request_info(conn)->remote_addr;
 
-	FileOpenSaveConsentDialog::ResultCode result;
+	ConsentDialog::ResultCode result;
 	bool denyFuture = false;
 	{
 		std::lock_guard<std::mutex> lock(consentDialogMutex);
@@ -308,7 +308,7 @@ bool FileConsentTokenService::handlePost(CivetServer* server, mg_connection* con
 	//	dialogResult.notify_all();
 	//});
 
-	if (result == FileOpenSaveConsentDialog::ACCEPT)
+	if (result == ConsentDialog::ACCEPT)
 	{
 		ConsentToken newToken = generateCryptoRandomInteger<ConsentToken>();
 		{
@@ -520,7 +520,7 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 	};
 
 	TrayStatusWindow::FileUploadActivityEntry* activityEntryRef =
-		wxCallAfterSync<IQuickOpenApplication, decltype(createActivity), TrayStatusWindow::
+		wxCallAfterSync<QuickOpenApplication, decltype(createActivity), TrayStatusWindow::
 		                FileUploadActivityEntry*>(progressReportingApp, createActivity);
 
 	try
@@ -565,6 +565,8 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 		progressReportingApp.CallAfter([activityEntryRef, ex]{ activityEntryRef->setError(&ex); });
 	}
 
+    mg_close_connection(conn);
+
 	bool allEnded = true;
 	size_t fileCount = 0;
 	{
@@ -586,7 +588,7 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 
 	if (allEnded)
 	{
-		IQuickOpenApplication& appRef = this->progressReportingApp;
+		QuickOpenApplication& appRef = this->progressReportingApp;
 		this->progressReportingApp.CallAfter([&appRef, fileCount]
 		{
 			appRef.notifyUser(MessageSeverity::MSG_INFO, wxT("File Upload Completed"),
@@ -613,7 +615,7 @@ bool OpenSaveFileAPIEndpoint::handlePost(CivetServer* server, mg_connection* con
 	return true;*/
 }
 
-QuickOpenWebServer::QuickOpenWebServer(IQuickOpenApplication& wxAppRef, unsigned port):
+QuickOpenWebServer::QuickOpenWebServer(QuickOpenApplication& wxAppRef, unsigned port):
 	CivetServer({
 		"document_root", STATIC_PATH.generic_string(),
 		"listening_ports", '+' + std::to_string(port)

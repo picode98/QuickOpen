@@ -3,7 +3,7 @@
 #include "WebServerUtils.h"
 #include "CivetWebIncludes.h"
 
-class IQuickOpenApplication;
+class QuickOpenApplication;
 
 struct MgmtServerFileData
 {
@@ -18,10 +18,10 @@ class ManagementServer : public CivetServer
 public:
 	class ConfigReloadHandler : public CivetHandler
 	{
-		IQuickOpenApplication& appRef;
+		QuickOpenApplication& appRef;
 
 	public:
-		ConfigReloadHandler(IQuickOpenApplication& appRef): appRef(appRef)
+		ConfigReloadHandler(QuickOpenApplication& appRef): appRef(appRef)
 		{}
 
 		bool handlePost(CivetServer* server, mg_connection* conn) override;
@@ -32,7 +32,7 @@ private:
 	CSRFAuthHandler authHandler;
 
 public:
-	ManagementServer(IQuickOpenApplication& appRef, unsigned port);
+	ManagementServer(QuickOpenApplication& appRef, unsigned port);
 };
 
 namespace ManagementClient

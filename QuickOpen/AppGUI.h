@@ -45,6 +45,7 @@
 #include "WebServer.h"
 
 class QuickOpenWebServer;
+class QuickOpenApplication;
 struct FileConsentRequestInfo;
 
 template<typename T>
@@ -147,10 +148,10 @@ class QuickOpenSettings : public wxFrame
 	wxButton* cancelButton;
 	wxButton* saveButton;
 
-    IQuickOpenApplication& appRef;
+    QuickOpenApplication& appRef;
 
 public:
-	QuickOpenSettings(IQuickOpenApplication& appRef);
+	QuickOpenSettings(QuickOpenApplication& appRef);
 
 	void OnSaveButton(wxCommandEvent& event);
 
@@ -249,12 +250,12 @@ public:
 
 class QuickOpenTaskbarIcon : public wxTaskBarIcon
 {
-    IQuickOpenApplication& appRef;
+    QuickOpenApplication& appRef;
 	TrayStatusWindow* statusWindow = nullptr;
 	
 	class TaskbarMenu : public wxMenu
 	{
-        IQuickOpenApplication& appRef;
+        QuickOpenApplication& appRef;
         TrayStatusWindow* statusWindow = nullptr;
 		
 	public:
@@ -267,7 +268,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 			EXIT
 		};
 
-		TaskbarMenu(IQuickOpenApplication& appRef, TrayStatusWindow* statusWindow);
+		TaskbarMenu(QuickOpenApplication& appRef, TrayStatusWindow* statusWindow);
 
         void OnStatusItemSelected(wxCommandEvent& event)
         {
@@ -311,7 +312,7 @@ class QuickOpenTaskbarIcon : public wxTaskBarIcon
 	}
 
 public:
-	QuickOpenTaskbarIcon(IQuickOpenApplication& appRef) : appRef(appRef)
+	QuickOpenTaskbarIcon(QuickOpenApplication& appRef) : appRef(appRef)
 	{
 		this->SetIcon(wxIcon(getAppIconPath().GetFullPath(), wxBITMAP_TYPE_ICO), wxT("QuickOpen"));
 		this->Bind(wxEVT_TASKBAR_LEFT_UP, &QuickOpenTaskbarIcon::OnIconClick, this);
@@ -364,15 +365,74 @@ private:
 	wxDECLARE_EVENT_TABLE();
 };
 
-class IQuickOpenApplication : public wxApp
+class QuickOpenApplication : public wxApp
 {
+    std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
+    QuickOpenTaskbarIcon* icon = nullptr;
+    std::unique_ptr<QuickOpenWebServer> server;
+    std::unique_ptr<ManagementServer> mgmtServer;
+
+    std::unique_ptr<wxSingleInstanceChecker> singleInstanceChecker;
+
+    std::optional<wxFileName> cliNewDefaultUploadFolder;
+    // QuickOpenSettings* settingsWindow = nullptr;
+
+    //class MainWindow : public wxFrame
+    //{
+    //	QuickOpenApplication& wxAppRef;
+    //public:
+    //	MainWindow(QuickOpenApplication& wxAppRef): wxFrame(nullptr, wxID_ANY, wxT("Main Window")), wxAppRef(wxAppRef)
+    //	{}
+
+    //	WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override
+    //	{
+    //		if(nMsg == winGetConfigUpdateMessageID())
+    //		{
+    //			wxAppRef.triggerConfigUpdate();
+    //		}
+
+    //		return wxFrame::MSWWindowProc(nMsg, wParam, lParam);
+    //	}
+    //};
+
+    //MainWindow* mainWindow = nullptr;
+    static const std::vector<wxCmdLineEntryDesc> COMMAND_LINE_DESC;
 public:
-	virtual TrayStatusWindow* getTrayWindow() const = 0;
-	virtual QuickOpenTaskbarIcon* getTrayIcon() const = 0;
-	virtual void notifyUser(MessageSeverity severity, const wxString& title, const wxString& text) = 0;
-	virtual void setupServer(unsigned newPort) = 0;
-	virtual bool promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested) = 0;
-	virtual std::pair<ConsentDialog::ResultCode, bool> promptForFileSave(const wxFileName& defaultDestDir, const wxString& requesterName, FileConsentRequestInfo& rqFileInfo) = 0;
-	virtual std::shared_ptr<WriterReadersLock<AppConfig>> getConfigRef() = 0;
-    virtual void triggerConfigUpdate() = 0;
+    void triggerConfigUpdate();
+
+    bool OnInit() override;
+
+    void OnInitCmdLine(wxCmdLineParser& parser) override;
+
+    bool OnCmdLineParsed(wxCmdLineParser& parser) override;
+
+    //void setConfigRef(WriterReadersLock<AppConfig>& configRef)
+    //{
+    //	this->configRef = &configRef;
+    //}
+
+    TrayStatusWindow* getTrayWindow() const
+    {
+        return this->icon->getTrayWindow();
+    }
+
+    QuickOpenTaskbarIcon* getTrayIcon() const
+    {
+        return this->icon;
+    }
+
+    void notifyUser(MessageSeverity severity, const wxString& title, const wxString& text);
+
+    void setupServer(unsigned newPort);
+
+    bool promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested);
+
+    std::pair<ConsentDialog::ResultCode, bool> promptForFileSave(const wxFileName& defaultDestDir, const wxString& requesterName, FileConsentRequestInfo& rqFileInfo);
+
+    std::shared_ptr<WriterReadersLock<AppConfig>> getConfigRef()
+    {
+        return configRef;
+    }
+
+    int OnExit() override;
 };
