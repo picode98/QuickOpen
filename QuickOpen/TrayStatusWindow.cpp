@@ -52,7 +52,7 @@ void TrayStatusWindow::fitActivityListWidth()
 	}
 }
 
-TrayStatusWindow::TrayStatusWindow(IQuickOpenApplication& appRef) : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
+TrayStatusWindow::TrayStatusWindow(QuickOpenApplication& appRef) : wxFrame(nullptr, wxID_ANY, wxT("QuickOpen Tray Status Window"), wxDefaultPosition,
 	wxSize(300, 300),
 	(wxDEFAULT_FRAME_STYLE | wxSTAY_ON_TOP | wxFRAME_NO_TASKBAR) & ~(
 		wxMINIMIZE_BOX | wxMAXIMIZE_BOX)), appRef(appRef)

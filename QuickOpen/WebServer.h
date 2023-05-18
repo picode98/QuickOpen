@@ -7,9 +7,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "AppGUI.h"
-#include "TrayStatusWindow.h"
+#include "AppGUIIncludes.h"
 #include "AppConfig.h"
+#include "WebServerUtils.h"
 #include "Utils.h"
 
 #include <atomic>
@@ -66,13 +66,13 @@ public:
 
 class OpenWebpageAPIEndpoint : public CivetHandler
 {
-	IQuickOpenApplication& wxAppRef;
+	QuickOpenApplication& wxAppRef;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 	// IQuickOpenApplication 
 
 public:
-	OpenWebpageAPIEndpoint(IQuickOpenApplication& wxAppRef, std::mutex& consentDialogMutex, WriterReadersLock<std::set<wxString>>& bannedIPRef):
+	OpenWebpageAPIEndpoint(QuickOpenApplication& wxAppRef, std::mutex& consentDialogMutex, WriterReadersLock<std::set<wxString>>& bannedIPRef):
 		wxAppRef(wxAppRef),
 		consentDialogMutex(consentDialogMutex),
 		bannedIPRef(bannedIPRef)
@@ -123,12 +123,12 @@ public:
 	WriterReadersLock<TokenMap> tokenWRRef;
 private:
 	// TokenMap tokens;
-	IQuickOpenApplication& wxAppRef;
+	QuickOpenApplication& wxAppRef;
 	std::mutex& consentDialogMutex;
 	WriterReadersLock<std::set<wxString>>& bannedIPRef;
 
 public:
-	FileConsentTokenService(std::mutex& consentDialogMutex, IQuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
+	FileConsentTokenService(std::mutex& consentDialogMutex, QuickOpenApplication& wxAppRef, WriterReadersLock<std::set<wxString>>& bannedIPRef) :
 		tokenWRRef(std::make_unique<TokenMap>()),
 		consentDialogMutex(consentDialogMutex),
 		wxAppRef(wxAppRef),
@@ -142,7 +142,7 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 {
 	// WriterReadersLock<AppConfig>& configLock;
 	FileConsentTokenService& consentServiceRef;
-	IQuickOpenApplication& progressReportingApp;
+	QuickOpenApplication& progressReportingApp;
 
 	class IncorrectFileLengthException : public std::runtime_error
 	{
@@ -170,7 +170,7 @@ class OpenSaveFileAPIEndpoint : public CivetHandler
 
 	// TrayStatusWindow* statusWindow = nullptr;
 public:
-	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef, IQuickOpenApplication& progressReportingApp) : consentServiceRef(consentServiceRef),
+	OpenSaveFileAPIEndpoint(FileConsentTokenService& consentServiceRef, QuickOpenApplication& progressReportingApp) : consentServiceRef(consentServiceRef),
 		progressReportingApp(progressReportingApp)
 	{}
 
@@ -179,7 +179,7 @@ public:
 
 class QuickOpenWebServer : public CivetServer
 {
-	IQuickOpenApplication& wxAppRef;
+	QuickOpenApplication& wxAppRef;
 
 	std::mutex consentDialogMutex;
 
@@ -195,7 +195,7 @@ class QuickOpenWebServer : public CivetServer
 	void onWebpageOpened(const wxString& url);
 	unsigned port;
 public:
-	QuickOpenWebServer(IQuickOpenApplication& wxAppRef, unsigned port);
+	QuickOpenWebServer(QuickOpenApplication& wxAppRef, unsigned port);
 
 	unsigned getPort() const
 	{

@@ -1,6 +1,6 @@
 #include "ManagementServer.h"
 
-#include "AppGUI.h"
+#include "AppGUIIncludes.h"
 #include "WebServerUtils.h"
 
 bool ManagementServer::ConfigReloadHandler::handlePost(CivetServer* server, mg_connection* conn)
@@ -9,7 +9,7 @@ bool ManagementServer::ConfigReloadHandler::handlePost(CivetServer* server, mg_c
 	return true;
 }
 
-ManagementServer::ManagementServer(IQuickOpenApplication& appRef, unsigned port) : CivetServer({
+ManagementServer::ManagementServer(QuickOpenApplication& appRef, unsigned port) : CivetServer({
 		"listening_ports", "127.0.0.1:" + std::to_string(port),
 		"num_threads", "1"
 	}), configReloadHandler(appRef)

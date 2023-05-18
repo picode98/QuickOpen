@@ -1,6 +1,8 @@
 #include "catch.hpp"
 
 #include "WebServer.h"
+#include "WebServerUtils.h"
+#include "AppGUIIncludes.h"
 
 TEST_CASE("sendJSONResponse function")
 {
@@ -25,14 +27,14 @@ TEST_CASE("StaticHandler class - happy path")
 
 	SECTION("happy path")
 	{
-		testConn.requestInfo = { "", "/static/image.png", "::1" };
+		testConn.requestInfo = mg_request_info { "", "/static/image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.size() == 1);
 		REQUIRE(wxFileName(testConn.sentFiles[0].first) == expectedStaticBase / wxFileName(".", "image.png"));
 	}
 	SECTION("unhappy path - path outside of static root")
 	{
-		testConn.requestInfo = { "", "/some_dir/image.png", "::1" };
+		testConn.requestInfo = mg_request_info { "", "/some_dir/image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.empty());
 		REQUIRE(testConn.responseStatus.has_value());
@@ -40,7 +42,7 @@ TEST_CASE("StaticHandler class - happy path")
 	}
 	SECTION("unhappy path - path with .. symbols")
 	{
-		testConn.requestInfo = { "", "/static/../image.png", "::1" };
+		testConn.requestInfo = mg_request_info { "", "/static/../image.png", "::1" };
 		REQUIRE(handler.handleGet(&testServer, &testConn));
 		REQUIRE(testConn.sentFiles.empty());
 		REQUIRE(testConn.responseStatus.has_value());
@@ -48,91 +50,17 @@ TEST_CASE("StaticHandler class - happy path")
 	}
 }
 
-class MockGUIApp : public IQuickOpenApplication
-{
-    std::shared_ptr<WriterReadersLock<AppConfig>> configRef;
-public:
-	bool confirmPrompts = false, requestBan = false;
-
-	MockGUIApp(bool confirmPrompts, bool requestBan): confirmPrompts(confirmPrompts), requestBan(requestBan),
-        configRef(std::make_shared<WriterReadersLock<AppConfig>>(std::make_unique<AppConfig>()))
-	{}
-
-	bool promptedForWebpage = false;
-	struct
-	{
-		std::string URL;
-		wxString requesterName;
-	} webpagePromptInfo;
-
-	TrayStatusWindow* getTrayWindow() const override
-	{
-		// TODO: Not yet mockable
-		return nullptr;
-	}
-
-	QuickOpenTaskbarIcon* getTrayIcon() const override
-	{
-		// TODO: Not yet mockable
-		return nullptr;
-	}
-
-	void notifyUser(MessageSeverity severity, const wxString& title, const wxString& text) override {}
-	void setupServer(unsigned newPort) override {}
-	bool promptForWebpageOpen(std::string URL, const wxString& requesterName, bool& banRequested) override
-	{
-		this->promptedForWebpage = true;
-		this->webpagePromptInfo = { URL, requesterName };
-		banRequested = requestBan;
-		return confirmPrompts;
-	}
-
-	std::optional<wxFileName> fileDestFolder;
-	bool promptedForFileSave = false;
-
-	std::pair<ConsentDialog::ResultCode, bool> promptForFileSave(const wxFileName& defaultDestDir, const wxString& requesterName, FileConsentRequestInfo& rqFileInfo) override
-	{
-		this->promptedForFileSave = true;
-		wxFileName destFolder = fileDestFolder.value_or(defaultDestDir);
-
-		if(confirmPrompts)
-		{
-			for (auto& thisFile : rqFileInfo.fileList)
-			{
-				thisFile.consentedFileName = destFolder / wxFileName("", thisFile.filename);
-			}
-
-			return { ConsentDialog::ResultCode::ACCEPT, requestBan };
-		}
-		else
-		{
-			return { ConsentDialog::ResultCode::DECLINE, requestBan };
-		}
-	}
-
-	bool configUpdateTriggered = false;
-	void triggerConfigUpdate() override
-	{
-		configUpdateTriggered = true;
-	}
-
-    std::shared_ptr<WriterReadersLock<AppConfig>> getConfigRef() override
-    {
-        return configRef;
-    }
-};
-
 TEST_CASE("OpenWebpageAPIEndpoint tests")
 {
 	CivetServer testServer({});
 	auto bannedSetLock = WriterReadersLock(std::make_unique<std::set<wxString>>());
 	std::mutex dlgMutex;
 	mg_connection testConn;
-	testConn.requestInfo = { "", "/api/openWebpage", "::1" };
+	testConn.requestInfo = mg_request_info { "", "/api/openWebpage", "::1" };
 
 	SECTION("happy path")
 	{
-		auto wxTestApp = MockGUIApp(true, false);
+		auto wxTestApp = QuickOpenApplication(true, false);
 		OpenWebpageAPIEndpoint endpoint(wxTestApp, dlgMutex, bannedSetLock);
 
 		testConn.inputBuffer = "url=http://example.com";
@@ -150,7 +78,7 @@ TEST_CASE("OpenWebpageAPIEndpoint tests")
 	}
 	SECTION("unhappy path - request denied")
 	{
-		auto wxTestApp = MockGUIApp(false, false);
+		auto wxTestApp = QuickOpenApplication(false, false);
 		OpenWebpageAPIEndpoint endpoint(wxTestApp, dlgMutex, bannedSetLock);
 
 		testConn.inputBuffer = "url=http://example.com";
@@ -167,7 +95,7 @@ TEST_CASE("OpenWebpageAPIEndpoint tests")
 	}
 	SECTION("unhappy path - request denied and user banned")
 	{
-		auto wxTestApp = MockGUIApp(false, true);
+		auto wxTestApp = QuickOpenApplication(false, true);
 		OpenWebpageAPIEndpoint endpoint(wxTestApp, dlgMutex, bannedSetLock);
 
 		testConn.inputBuffer = "url=http://example.com";
@@ -186,7 +114,7 @@ TEST_CASE("OpenWebpageAPIEndpoint tests")
 		wxTestApp.promptedForWebpage = false;
 
 		mg_connection testConn2;
-		testConn2.requestInfo = { "", "/api/openWebpage", "::1" };
+		testConn2.requestInfo = mg_request_info { "", "/api/openWebpage", "::1" };
 		testConn2.inputBuffer = "url=http://example.com";
 		REQUIRE(endpoint.handlePost(&testServer, &testConn2));
 		REQUIRE(testConn2.responseStatus == 403);
@@ -198,7 +126,7 @@ TEST_CASE("OpenWebpageAPIEndpoint tests")
 	}
 	SECTION("unhappy path - invalid URL")
 	{
-		auto wxTestApp = MockGUIApp(true, false);
+		auto wxTestApp = QuickOpenApplication(true, false);
 		OpenWebpageAPIEndpoint endpoint(wxTestApp, dlgMutex, bannedSetLock);
 
 		testConn.inputBuffer = "url=ftp://example.com";
@@ -221,11 +149,11 @@ TEST_CASE("FileConsentTokenService tests")
 	auto bannedSetLock = WriterReadersLock(std::make_unique<std::set<wxString>>());
 	std::mutex dlgMutex;
 	mg_connection testConn;
-	testConn.requestInfo = { "", "/api/saveFile", "::1" };
+	testConn.requestInfo = mg_request_info { "", "/api/saveFile", "::1" };
 
 	SECTION("happy path")
 	{
-		auto wxTestApp = MockGUIApp(true, false);
+		auto wxTestApp = QuickOpenApplication(true, false);
 		FileConsentTokenService endpoint(dlgMutex, wxTestApp, bannedSetLock);
 
 		testConn.inputBuffer = testFileInfo;
@@ -251,7 +179,7 @@ TEST_CASE("FileConsentTokenService tests")
 	}
 	SECTION("unhappy path - request denied")
 	{
-		auto wxTestApp = MockGUIApp(false, false);
+		auto wxTestApp = QuickOpenApplication(false, false);
 		FileConsentTokenService endpoint(dlgMutex, wxTestApp, bannedSetLock);
 
 		testConn.inputBuffer = testFileInfo;
@@ -270,7 +198,7 @@ TEST_CASE("FileConsentTokenService tests")
 	}
 	SECTION("unhappy path - request denied and user banned")
 	{
-		auto wxTestApp = MockGUIApp(false, true);
+		auto wxTestApp = QuickOpenApplication(false, true);
 		FileConsentTokenService endpoint(dlgMutex, wxTestApp, bannedSetLock);
 
 		testConn.inputBuffer = testFileInfo;
@@ -292,7 +220,7 @@ TEST_CASE("FileConsentTokenService tests")
 		wxTestApp.promptedForFileSave = false;
 
 		mg_connection testConn2;
-		testConn2.requestInfo = { "", "/api/saveFile", "::1" };
+		testConn2.requestInfo = mg_request_info { "", "/api/saveFile", "::1" };
 		testConn2.inputBuffer = testFileInfo;
 
 		REQUIRE(endpoint.handlePost(&testServer, &testConn2));
@@ -304,4 +232,76 @@ TEST_CASE("FileConsentTokenService tests")
 
 		REQUIRE(*bannedSetLock.obj.get() == std::set<wxString> { wxT("::1") });
 	}
+}
+
+TEST_CASE("OpenSaveFileAPIEndpoint tests")
+{
+    CivetServer testServer({});
+    auto bannedSetLock = WriterReadersLock(std::make_unique<std::set<wxString>>());
+    std::mutex dlgMutex;
+    std::string testContent = "The brown fox jumped over the lazy dog.";
+
+    auto wxTestApp = QuickOpenApplication(true, false);
+    FileConsentTokenService consentEndpoint(dlgMutex, wxTestApp, bannedSetLock);
+    ConsentToken testToken = 3;
+
+    OpenSaveFileAPIEndpoint saveEndpoint(consentEndpoint, wxTestApp);
+
+    SECTION("happy path")
+    {
+        FileConsentRequestInfo::RequestedFileInfo testFileInfo;
+        testFileInfo.filename = wxT("testFile.txt");
+        testFileInfo.fileSize = testContent.size();
+        testFileInfo.consentedFileName = wxT("testFileConsented.txt");
+
+        {
+            WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
+                    tokens(consentEndpoint.tokenWRRef);
+            tokens->insert({ testToken, { testFileInfo } });
+        }
+
+        mg_connection testConn;
+        testConn.requestInfo = mg_request_info { "consentToken=3&fileIndex=0", "/api/saveFile", "::1" };
+        testConn.inputBuffer = testContent;
+
+        REQUIRE(saveEndpoint.handlePost(&testServer, &testConn));
+        REQUIRE(testConn.inputBuffer.empty());
+        REQUIRE(testConn.responseStatus == 200);
+        REQUIRE(!testConn.isOpen);
+        REQUIRE(testFileInfo.consentedFileName.FileExists());
+        REQUIRE(testFileInfo.consentedFileName.GetSize() == testContent.size());
+        std::string actualContent = fileReadAll(testFileInfo.consentedFileName);
+        REQUIRE(actualContent == testContent);
+    }
+    SECTION("unhappy path - invalid consent token or file index")
+    {
+        FileConsentRequestInfo::RequestedFileInfo testFileInfo;
+        testFileInfo.filename = wxT("testFile.txt");
+        testFileInfo.fileSize = testContent.size();
+        testFileInfo.consentedFileName = wxT("testFileConsented2.txt");
+
+        {
+            WriterReadersLock<FileConsentTokenService::TokenMap>::WritableReference
+                    tokens(consentEndpoint.tokenWRRef);
+            tokens->insert({ testToken, { testFileInfo } });
+        }
+
+        mg_connection testConn;
+        testConn.requestInfo = mg_request_info { "consentToken=4&fileIndex=0", "/api/saveFile", "::1" };
+        testConn.inputBuffer = testContent;
+
+        REQUIRE(saveEndpoint.handlePost(&testServer, &testConn));
+        REQUIRE(testConn.responseStatus == 403);
+        REQUIRE(!testConn.isOpen);
+        REQUIRE(!testFileInfo.consentedFileName.FileExists());
+
+        mg_connection testConn2;
+        testConn2.requestInfo = mg_request_info { "consentToken=3&fileIndex=1", "/api/saveFile", "::1" };
+        testConn2.inputBuffer = testContent;
+
+        REQUIRE(saveEndpoint.handlePost(&testServer, &testConn2));
+        REQUIRE(testConn2.responseStatus == 403);
+        REQUIRE(!testConn2.isOpen);
+        REQUIRE(!testFileInfo.consentedFileName.FileExists());
+    }
 }

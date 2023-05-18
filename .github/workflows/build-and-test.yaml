@@ -36,27 +36,40 @@ jobs:
                 setupOnly: true
             - name: Install dependency packages
               env:
+                JOB_OS: ${{ matrix.os }}
                 VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_target_triplet }}
               run: |
-                $VCPKG_ROOT/vcpkg install wxwidgets:$VCPKG_TARGET_TRIPLET nlohmann-json:$VCPKG_TARGET_TRIPLET civetweb:$VCPKG_TARGET_TRIPLET catch2:$VCPKG_TARGET_TRIPLET
+                if([ "$JOB_OS" = "ubuntu-20.04" ]); then
+                    sudo apt-get install -y libgtk-3-dev
+                fi
               shell: bash
+            - name: Archive dependency build logs
+              uses: actions/upload-artifact@v2
+              if: always()
+              with:
+                name: "${{ matrix.os }} dependency build logs"
+                path: vcpkg/buildtrees/**/*.log
             - name: Configure and build CMake project
               env:
+                JOB_OS: ${{ matrix.os }}
                 VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_target_triplet }}
               run: |
-                cmake . -Ax64 -DVCPKG_TARGET_TRIPLET=$VCPKG_TARGET_TRIPLET -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build . --config Release --target package
+                cmake . $([[ "$JOB_OS" == *"windows"* ]] && printf %s "-Ax64") -DVCPKG_TARGET_TRIPLET=$VCPKG_TARGET_TRIPLET -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" && cmake --build . --config Release --target package
               shell: bash
             - run: |
                 unzip pkg/QuickOpen*.zip -d ./test_install
+                sleep 10
                 ./test_install/QuickOpen*/bin/test_driver -r junit -o testing_results.xml
               shell: bash
             - name: Publish Test Results
               uses: EnricoMi/publish-unit-test-result-action/composite@v1
-              if: always()
+              if: success() || failure()
               with:
                 files: testing_results.xml
+                check_name: "Test Results (${{ matrix.os }})"
             - name: Archive built binaries
               uses: actions/upload-artifact@v2
+              if: success() || failure()
               with:
                 name: ${{ matrix.artifact_name }}
                 path: pkg/QuickOpen*
