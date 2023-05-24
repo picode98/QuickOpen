@@ -354,3 +354,13 @@ inline std::string fileReadAll(const wxFileName& path)
 
 	return dataStream.str();
 }
+
+#define MAP_VECTOR(ResultType, input, ResultName, expr, cond) \
+std::vector<ResultType> ResultName; \
+for(const auto& elem : input) \
+{ \
+    if(cond) \
+    { \
+    ResultName.emplace_back(expr); \
+    } \
+}

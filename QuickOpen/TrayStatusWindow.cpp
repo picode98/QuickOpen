@@ -28,7 +28,8 @@ void TrayStatusWindow::OnShow(wxShowEvent& event)
 {
 	if (event.IsShown())
 	{
-		auto* newDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
+        wxString systemHostname = getSystemHostname();
+		auto* newDisplay = new ServerURLDisplay(topLevelPanel, { systemHostname + ".local" }, getPhysicalNetworkInterfaces(),
 			WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort);
 		bool replaced = topLevelSizer->Replace(URLDisplay, newDisplay);
 		assert(replaced);
@@ -64,7 +65,7 @@ TrayStatusWindow::TrayStatusWindow(QuickOpenApplication& appRef) : wxFrame(nullp
 	panelSizer->Add(topLevelPanel, wxSizerFlags(1).Expand());
 
 	topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, getPhysicalNetworkInterfaces(), 
+	topLevelSizer->Add(URLDisplay = new ServerURLDisplay(topLevelPanel, {}, {},
 		WriterReadersLock<AppConfig>::ReadableReference(*appRef.getConfigRef())->serverPort), wxSizerFlags(0).Expand());
 	topLevelSizer->Add(activityList = new ActivityList(topLevelPanel), wxSizerFlags(1).Expand());
 	setSizerWithPadding(topLevelPanel, topLevelSizer);
@@ -383,44 +384,54 @@ void TrayStatusWindow::ActivityList::removeActivity(ActivityEntry* entry)
 //	EVT_SIZE(TrayStatusWindow::ActivityList::OnSize)
 //wxEND_EVENT_TABLE()
 
-TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort):
+void TrayStatusWindow::ServerURLDisplay::addHyperlinkGroup(const wxString& headerText, const std::vector<wxString>& links)
+{
+    auto* subHeaderControl = new AutoWrappingStaticText(this, wxID_ANY, headerText);
+    subHeaderControl->SetFont(subHeaderControl->GetFont().Bold());
+    this->topLevelSizer->Add(
+            subHeaderControl,
+            wxSizerFlags(0).Expand()
+    );
+
+    for(const wxString& link : links)
+    {
+        this->topLevelSizer->Add(
+                new wxHyperlinkCtrl(this, wxID_ANY, link, link),
+                wxSizerFlags(0).Expand().Border(wxLEFT, this->FromDIP(10))
+        );
+    }
+}
+
+TrayStatusWindow::ServerURLDisplay::ServerURLDisplay(wxWindow* parent, const std::vector<wxString> domains,
+                                                     const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort):
 	wxWindow(parent, wxID_ANY)
 {
-	auto* topLevelSizer = new wxBoxSizer(wxVERTICAL);
-	headerText = new AutoWrappingStaticText(this, wxID_ANY, interfaces.empty() ?
-		wxT("No active LAN connections detected. Connect to a LAN to open content on this computer.") :
-		wxT("To open content on this computer, share the following links with others on your network:"));
-	topLevelSizer->Add(headerText, wxSizerFlags(0).Expand());
+	this->topLevelSizer = new wxBoxSizer(wxVERTICAL);
+    headerTextControl = new AutoWrappingStaticText(this, wxID_ANY, interfaces.empty() ?
+                                                                   wxT("No active LAN connections detected. Connect to a LAN to open content on this computer.") :
+                                                                   wxT("To open content on this computer, share the following links with others on your network:"));
+	topLevelSizer->Add(headerTextControl, wxSizerFlags(0).Expand());
+
+    if(!interfaces.empty())
+    {
+        MAP_VECTOR(wxString, domains, URLs, (wxString() << wxT("http://") << elem << wxT(":") << serverPort), true)
+        this->addHyperlinkGroup(wxT("Any network:"), URLs);
+    }
 
 	for(const NetworkInterfaceInfo& thisInterface : interfaces)
 	{
 		if (!thisInterface.IPAddresses.empty())
 		{
 #if NetworkInterfaceInfo_DRIVER_NAME_AVAILABLE
-            auto* interfaceText = new AutoWrappingStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(" (") << thisInterface.driverName << wxT("):"));
+            auto headerString = wxString() << thisInterface.interfaceName << wxT(" (") << thisInterface.driverName << wxT("):");
 #else
-            auto* interfaceText = new AutoWrappingStaticText(this, wxID_ANY, wxString() << thisInterface.interfaceName << wxT(":"));
+            auto headerString = wxString() << thisInterface.interfaceName << wxT(":");
 #endif
 
-			interfaceText->SetFont(interfaceText->GetFont().Bold());
-			topLevelSizer->Add(
-				interfaceText,
-				wxSizerFlags(0).Expand()
-			);
-
-			for (const IPAddress& thisAddress : thisInterface.IPAddresses)
-			{
-                if(!thisAddress.isLinkLocal)
-                {
-                    wxString thisURL = wxString() << wxT("http://")
-                        << ((thisAddress.type == IPAddress::IPV6) ? (wxT("[") + thisAddress.addressStr + wxT("]")) : thisAddress.addressStr) << wxT(":") << serverPort;
-
-                    topLevelSizer->Add(
-                        new wxHyperlinkCtrl(this, wxID_ANY, thisURL, thisURL),
-                        wxSizerFlags(0).Expand().Border(wxLEFT, this->FromDIP(10))
-                    );
-                }
-			}
+            MAP_VECTOR(wxString, thisInterface.IPAddresses, URLs,
+                       (wxString() << wxT("http://") << ((elem.type == IPAddress::IPV6) ? (wxT("[") + elem.addressStr + wxT("]")) : elem.addressStr) << wxT(":") << serverPort),
+                       !elem.isLinkLocal)
+            this->addHyperlinkGroup(headerString, URLs);
 		}
 	}
 

@@ -209,6 +209,8 @@ void addUserStartupEntry();
 void removeUserStartupEntry();
 StartupEntryState getStartupEntryState();
 
+wxString getSystemHostname();
+
 inline UINT winGetConfigUpdateMessageID()
 {
 	static UINT msgID = RegisterWindowMessage(TEXT("UpdateConfiguration"));

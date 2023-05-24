@@ -544,6 +544,29 @@ StartupEntryState getStartupEntryState()
 	}
 }
 
+wxString getSystemHostname()
+{
+    DWORD bufSize = 0;
+
+    if(GetComputerNameEx(COMPUTER_NAME_FORMAT::ComputerNameDnsFullyQualified, nullptr, &bufSize) != 0
+       || GetLastError() != ERROR_MORE_DATA)
+    {
+        throw getWinAPIError(GetLastError());
+    }
+
+    auto resultBuf = new TCHAR[bufSize];
+
+    if(GetComputerNameEx(COMPUTER_NAME_FORMAT::ComputerNameDnsFullyQualified, resultBuf, &bufSize) == 0)
+    {
+        delete[] resultBuf;
+        throw getWinAPIError(GetLastError());
+    }
+
+    wxString result(resultBuf);
+    delete[] resultBuf;
+    return result;
+}
+
 void broadcastConfigUpdate()
 {
 	//DWORD bytesWritten;

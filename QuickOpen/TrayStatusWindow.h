@@ -116,11 +116,14 @@ public:
 
 	class ServerURLDisplay : public wxWindow
 	{
-		AutoWrappingStaticText* headerText = nullptr;
+		AutoWrappingStaticText* headerTextControl = nullptr;
+        wxBoxSizer* topLevelSizer = nullptr;
 
 		// void OnSize(wxSizeEvent& event);
 	public:
-		ServerURLDisplay(wxWindow* parent, const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort);
+		ServerURLDisplay(wxWindow* parent, const std::vector<wxString> domains,
+                         const std::vector<NetworkInterfaceInfo>& interfaces, int serverPort);
+        void addHyperlinkGroup(const wxString& headerText, const std::vector<wxString>& links);
 
 		// wxDECLARE_EVENT_TABLE();
 	};
